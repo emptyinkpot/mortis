@@ -63,7 +63,7 @@ func (s *PingStore) Create(runtimeID string) *PingRequest {
 	}
 
 	ping := &PingRequest{
-		ID:        randomID(),
+		ID:        runtimePingRandomID(),
 		RuntimeID: runtimeID,
 		Status:    PingPending,
 		CreatedAt: time.Now(),
@@ -134,7 +134,7 @@ func (s *PingStore) Fail(id string, errMsg string, durationMs int64) {
 	}
 }
 
-func randomID() string {
+func runtimePingRandomID() string {
 	b := make([]byte, 16)
 	rand.Read(b)
 	return hex.EncodeToString(b)
