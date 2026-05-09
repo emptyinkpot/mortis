@@ -9,6 +9,64 @@ import (
 	"time"
 )
 
+func TestRuntimeHandlersRejectMalformedRuntimeID(t *testing.T) {
+	tests := []struct {
+		name   string
+		method string
+		path   string
+		handle func(http.ResponseWriter, *http.Request)
+	}{
+		{
+			name:   "usage",
+			method: "GET",
+			path:   "/api/runtimes/not-a-uuid/usage",
+			handle: testHandler.GetRuntimeUsage,
+		},
+		{
+			name:   "task activity",
+			method: "GET",
+			path:   "/api/runtimes/not-a-uuid/task-activity",
+			handle: testHandler.GetRuntimeTaskActivity,
+		},
+		{
+			name:   "delete",
+			method: "DELETE",
+			path:   "/api/runtimes/not-a-uuid",
+			handle: testHandler.DeleteAgentRuntime,
+		},
+		{
+			name:   "models",
+			method: "POST",
+			path:   "/api/runtimes/not-a-uuid/models",
+			handle: testHandler.InitiateListModels,
+		},
+		{
+			name:   "update",
+			method: "POST",
+			path:   "/api/runtimes/not-a-uuid/update",
+			handle: testHandler.InitiateUpdate,
+		},
+		{
+			name:   "local skills",
+			method: "POST",
+			path:   "/api/runtimes/not-a-uuid/local-skills",
+			handle: testHandler.InitiateListLocalSkills,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			req := newRequest(tt.method, tt.path, nil)
+			req = withURLParam(req, "runtimeId", "not-a-uuid")
+			tt.handle(w, req)
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("%s: expected 400 for malformed runtimeId, got %d: %s", tt.name, w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
 // TestGetRuntimeUsage_BucketsByUsageTime ensures a task that was enqueued on
 // one calendar day but whose tokens were reported the next day (e.g. execution
 // crossed midnight, or the task sat in the queue) is attributed to the day
@@ -78,8 +136,29 @@ func TestGetRuntimeUsage_BucketsByUsageTime(t *testing.T) {
 		return taskID
 	}
 
-	insertTaskWithUsage(yesterdayLate, todayEarly, 1000)     // cross-midnight
+	insertTaskWithUsage(yesterdayLate, todayEarly, 1000)          // cross-midnight
 	insertTaskWithUsage(yesterdayMorning, yesterdayMorning, 2000) // full-day yesterday
+
+	// ListRuntimeUsage now reads from the `task_usage_daily` rollup
+	// table maintained by the cron-driven rollup_task_usage_daily()
+	// function. In production the watermarked wrapper waits a 5 min
+	// safety lag before consuming rows; here we drive the underlying
+	// window function directly with a wide-open range so the freshly
+	// inserted fixture rows are guaranteed to be aggregated before the
+	// handler is called. Each test invocation gets its own isolated
+	// daily buckets keyed by (date, runtime, provider, model), so
+	// re-running the test is idempotent (the upsert just rewrites the
+	// same totals).
+	if _, err := testPool.Exec(ctx, `
+		SELECT rollup_task_usage_daily_window('-infinity'::timestamptz, 'infinity'::timestamptz)
+	`); err != nil {
+		t.Fatalf("rollup_task_usage_daily_window: %v", err)
+	}
+	t.Cleanup(func() {
+		testPool.Exec(ctx, `
+			DELETE FROM task_usage_daily WHERE runtime_id = $1 AND bucket_date IN ($2::date, $3::date)
+		`, runtimeID, today, today.Add(-24*time.Hour))
+	})
 
 	// Call the handler with ?days=1 at whatever "now" is. That should include
 	// both today and yesterday in full.
