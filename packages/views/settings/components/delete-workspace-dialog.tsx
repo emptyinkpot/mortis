@@ -12,6 +12,8 @@ import {
 import { Input } from "@multica/ui/components/ui/input";
 import { Label } from "@multica/ui/components/ui/label";
 import { Button } from "@multica/ui/components/ui/button";
+import { isImeComposing } from "@multica/core/utils";
+import { useT } from "../../i18n";
 
 /**
  * Typed-confirmation dialog for workspace deletion — GitHub's repo-delete
@@ -42,6 +44,7 @@ export function DeleteWorkspaceDialog({
   onOpenChange: (open: boolean) => void;
   onConfirm: () => void;
 }) {
+  const { t } = useT("settings");
   const [typed, setTyped] = useState("");
   const matched = typed === workspaceName;
 
@@ -62,26 +65,26 @@ export function DeleteWorkspaceDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>删除工作区</DialogTitle>
+          <DialogTitle>{t(($) => $.delete_workspace_dialog.title)}</DialogTitle>
           <DialogDescription>
-            此操作不可撤销。所有事项、智能体和相关数据都将被
-            永久删除。
+            {t(($) => $.delete_workspace_dialog.description)}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-2">
           <Label htmlFor="delete-workspace-confirm" className="text-xs">
-            输入{" "}
+            {t(($) => $.delete_workspace_dialog.type_to_confirm_prefix)}{" "}
             <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">
               {workspaceName}
             </code>{" "}
-            以确认删除。
+            {t(($) => $.delete_workspace_dialog.type_to_confirm_suffix)}
           </Label>
           <Input
             id="delete-workspace-confirm"
             value={typed}
             onChange={(e) => setTyped(e.target.value)}
             onKeyDown={(e) => {
+              if (isImeComposing(e)) return;
               if (e.key === "Enter") {
                 e.preventDefault();
                 submit();
@@ -104,7 +107,7 @@ export function DeleteWorkspaceDialog({
             onClick={() => onOpenChange(false)}
             disabled={loading}
           >
-            取消
+            {t(($) => $.delete_workspace_dialog.cancel)}
           </Button>
           <Button
             type="button"
@@ -112,7 +115,7 @@ export function DeleteWorkspaceDialog({
             onClick={submit}
             disabled={!matched || loading}
           >
-            {loading ? "删除中..." : "删除工作区"}
+            {loading ? t(($) => $.delete_workspace_dialog.deleting) : t(($) => $.delete_workspace_dialog.confirm)}
           </Button>
         </DialogFooter>
       </DialogContent>

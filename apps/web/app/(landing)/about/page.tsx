@@ -2,13 +2,13 @@ import type { Metadata } from "next";
 import { AboutPageClient } from "@/features/landing/components/about-page-client";
 
 export const metadata: Metadata = {
-  title: "关于 Mortis",
+  title: "About",
   description:
-    "了解 Mortis——一个面向单一操作者与其 Agent 的私人指挥工作区。",
+    "Learn about Multica — multiplexed information and computing agent. An open-source project management platform for human + agent teams.",
   openGraph: {
-    title: "关于 Mortis",
+    title: "About Multica",
     description:
-      "Mortis 的来历，以及它为何被收口为私人指挥工作区。",
+      "The story behind Multica and why we're building project management for human + agent teams.",
     url: "/about",
   },
   alternates: {

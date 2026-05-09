@@ -22,24 +22,16 @@ function workspaceScoped(slug: string) {
     issueDetail: (id: string) => `${ws}/issues/${encode(id)}`,
     projects: () => `${ws}/projects`,
     projectDetail: (id: string) => `${ws}/projects/${encode(id)}`,
-    agentOS: () => `${ws}/agent-os`,
-    manager: () => `${ws}/manager`,
-    roles: () => `${ws}/roles`,
     autopilots: () => `${ws}/autopilots`,
     autopilotDetail: (id: string) => `${ws}/autopilots/${encode(id)}`,
     agents: () => `${ws}/agents`,
-    internalChat: () => `${ws}/internal-chat`,
+    agentDetail: (id: string) => `${ws}/agents/${encode(id)}`,
     inbox: () => `${ws}/inbox`,
     myIssues: () => `${ws}/my-issues`,
-    overview: () => `${ws}/overview`,
-    servers: () => `${ws}/servers`,
-    deployments: () => `${ws}/deployments`,
-    domains: () => `${ws}/domains`,
-    atramentiHome: () => `${ws}/atramenti`,
-    atramentiOverview: () => `${ws}/atramenti/system-overview`,
-    atramentiNovel: () => `${ws}/atramenti/novel`,
     runtimes: () => `${ws}/runtimes`,
+    runtimeDetail: (id: string) => `${ws}/runtimes/${encode(id)}`,
     skills: () => `${ws}/skills`,
+    skillDetail: (id: string) => `${ws}/skills/${encode(id)}`,
     settings: () => `${ws}/settings`,
   };
 }
@@ -51,6 +43,8 @@ export const paths = {
   login: () => "/login",
   newWorkspace: () => "/workspaces/new",
   invite: (id: string) => `/invite/${encode(id)}`,
+  invitations: () => "/invitations",
+  onboarding: () => "/onboarding",
   authCallback: () => "/auth/callback",
   root: () => "/",
 };
@@ -61,7 +55,7 @@ export type WorkspacePaths = ReturnType<typeof workspaceScoped>;
 // A path is global if it equals or begins with any of these.
 // Note: `/workspaces/` (trailing slash) is the prefix — `workspaces` is reserved,
 // so any path starting with `/workspaces/...` is system-owned, not user-owned.
-const GLOBAL_PREFIXES = ["/login", "/workspaces/", "/invite/", "/auth/", "/logout", "/signup"];
+const GLOBAL_PREFIXES = ["/login", "/workspaces/", "/invite/", "/invitations", "/onboarding", "/auth/", "/logout", "/signup"];
 
 export function isGlobalPath(path: string): boolean {
   return GLOBAL_PREFIXES.some((p) => path === p || path.startsWith(p));

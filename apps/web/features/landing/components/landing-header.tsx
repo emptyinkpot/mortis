@@ -7,8 +7,6 @@ import { useAuthStore } from "@multica/core/auth";
 import { useLocale } from "../i18n";
 import { GitHubMark, githubUrl, headerButtonClassName } from "./shared";
 
-const singleUserMode = Boolean(process.env.NEXT_PUBLIC_AUTO_LOGIN_WORKSPACE_SLUG);
-
 export function LandingHeader({
   variant = "dark",
 }: {
@@ -37,11 +35,11 @@ export function LandingHeader({
           />
           <span
             className={cn(
-              "text-[18px] font-semibold tracking-[0.04em] sm:text-[20px]",
+              "text-[18px] font-semibold tracking-[0.04em] lowercase sm:text-[20px]",
               variant === "dark" ? "text-white/92" : "text-[#0a0d12]",
             )}
           >
-            Mortis
+            multica
           </span>
         </Link>
 
@@ -59,7 +57,7 @@ export function LandingHeader({
             href={user ? "/" : "/login"}
             className={headerButtonClassName("solid", variant)}
           >
-            {singleUserMode ? "进入 Mortis" : user ? t.header.dashboard : t.header.login}
+            {user ? t.header.dashboard : t.header.login}
           </Link>
         </div>
       </div>

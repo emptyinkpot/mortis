@@ -27,8 +27,9 @@ const borderedSizes = {
 };
 
 /**
- * Shared Mortis monogram icon.
- * Keeps the existing component API so the app can rebrand without touching every caller.
+ * Pure CSS 8-pointed asterisk icon matching the Multica logo.
+ * Uses currentColor so it adapts to light/dark themes automatically.
+ * Clip-path polygon traced from the original SVG path coordinates.
  */
 export function MulticaIcon({
   className,
@@ -46,19 +47,14 @@ export function MulticaIcon({
     return () => clearTimeout(timer);
   }, [animate]);
 
-  const iconSvg = (
-    <svg viewBox="0 0 100 100" className="block size-full" aria-hidden="true">
-      <path
-        fill="currentColor"
-        d="M16 82V18h16l18 29 18-29h16v64H70V45L50 75 30 45v37z"
-      />
-      <path
-        fill="currentColor"
-        opacity="0.35"
-        d="M50 47 65 23h9L50 61 26 23h9z"
-      />
-    </svg>
-  );
+  const clipPath = `polygon(
+    45% 62.1%, 45% 100%, 55% 100%, 55% 62.1%,
+    81.8% 88.9%, 88.9% 81.8%, 62.1% 55%, 100% 55%,
+    100% 45%, 62.1% 45%, 88.9% 18.2%, 81.8% 11.1%,
+    55% 37.9%, 55% 0%, 45% 0%, 45% 37.9%,
+    18.2% 11.1%, 11.1% 18.2%, 37.9% 45%, 0% 45%,
+    0% 55%, 37.9% 55%, 11.1% 81.8%, 18.2% 88.9%
+  )`;
 
   if (bordered) {
     const sizeConfig = borderedSizes[size];
@@ -80,7 +76,10 @@ export function MulticaIcon({
             entranceDone && !noSpin && "hover:animate-spin"
           )}
         >
-          {iconSvg}
+          <span
+            className="block size-full bg-current"
+            style={{ clipPath }}
+          />
         </span>
       </span>
     );
@@ -97,7 +96,10 @@ export function MulticaIcon({
       aria-hidden="true"
       {...props}
     >
-      {iconSvg}
+      <span
+        className="block size-full bg-current"
+        style={{ clipPath }}
+      />
     </span>
   );
 }

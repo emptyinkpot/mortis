@@ -1,2 +1,1 @@
-export { AgentsPage } from "./components";
-export { InternalGroupChatPage } from "./components";
+export { AgentsPage, AgentDetailPage } from "./components";

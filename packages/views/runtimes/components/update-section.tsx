@@ -9,17 +9,18 @@ import {
 import { Button } from "@multica/ui/components/ui/button";
 import { api } from "@multica/core/api";
 import type { RuntimeUpdateStatus } from "@multica/core/types";
+import { useT } from "../../i18n";
 
 const GITHUB_RELEASES_URL =
   "https://api.github.com/repos/multica-ai/multica/releases/latest";
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
-let cached已最新Version: string | null = null;
+let cachedLatestVersion: string | null = null;
 let cachedAt = 0;
 
-async function fetch已最新Version(): Promise<string | null> {
-  if (cached已最新Version && Date.now() - cachedAt < CACHE_TTL_MS) {
-    return cached已最新Version;
+async function fetchLatestVersion(): Promise<string | null> {
+  if (cachedLatestVersion && Date.now() - cachedAt < CACHE_TTL_MS) {
+    return cachedLatestVersion;
   }
   try {
     const resp = await fetch(GITHUB_RELEASES_URL, {
@@ -27,9 +28,9 @@ async function fetch已最新Version(): Promise<string | null> {
     });
     if (!resp.ok) return null;
     const data = await resp.json();
-    cached已最新Version = data.tag_name ?? null;
+    cachedLatestVersion = data.tag_name ?? null;
     cachedAt = Date.now();
-    return cached已最新Version;
+    return cachedLatestVersion;
   } catch {
     return null;
   }
@@ -53,25 +54,13 @@ function isNewer(latest: string, current: string): boolean {
 
 const statusConfig: Record<
   RuntimeUpdateStatus,
-  { label: string; icon: typeof Loader2; color: string }
+  { icon: typeof Loader2; color: string }
 > = {
-  pending: {
-    label: "等待守护进程响应...",
-    icon: Loader2,
-    color: "text-muted-foreground",
-  },
-  running: {
-    label: "更新中...",
-    icon: Loader2,
-    color: "text-info",
-  },
-  completed: {
-    label: "更新完成，守护进程正在重启...",
-    icon: CheckCircle2,
-    color: "text-success",
-  },
-  failed: { label: "更新失败", icon: XCircle, color: "text-destructive" },
-  timeout: { label: "超时", icon: XCircle, color: "text-warning" },
+  pending: { icon: Loader2, color: "text-muted-foreground" },
+  running: { icon: Loader2, color: "text-info" },
+  completed: { icon: CheckCircle2, color: "text-success" },
+  failed: { icon: XCircle, color: "text-destructive" },
+  timeout: { icon: XCircle, color: "text-warning" },
 };
 
 interface UpdateSectionProps {
@@ -93,12 +82,14 @@ export function UpdateSection({
   isOnline,
   launchedBy,
 }: UpdateSectionProps) {
+  const { t } = useT("runtimes");
   const isManaged = launchedBy === "desktop";
-  const [latestVersion, set已最新Version] = useState<string | null>(null);
+  const [latestVersion, setLatestVersion] = useState<string | null>(null);
   const [status, setStatus] = useState<RuntimeUpdateStatus | null>(null);
   const [error, setError] = useState("");
   const [output, setOutput] = useState("");
   const [updating, setUpdating] = useState(false);
+  const [targetVersion, setTargetVersion] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const cleanup = useCallback(() => {
@@ -112,13 +103,35 @@ export function UpdateSection({
 
   // Fetch latest version on mount.
   useEffect(() => {
-    fetch已最新Version().then(set已最新Version);
+    fetchLatestVersion().then(setLatestVersion);
   }, []);
+
+  const markCompleted = useCallback(
+    (message: string) => {
+      setStatus("completed");
+      setOutput(message);
+      setUpdating(false);
+      setTargetVersion(null);
+      cleanup();
+      // Auto-clear status after a few seconds so the UI refreshes to show the
+      // new version from the re-fetched runtime data.
+      setTimeout(() => setStatus(null), 5000);
+    },
+    [cleanup],
+  );
+
+  useEffect(() => {
+    if (!updating || !targetVersion || !currentVersion) return;
+    if (!isNewer(targetVersion, currentVersion)) {
+      markCompleted(`Updated to ${targetVersion}`);
+    }
+  }, [currentVersion, markCompleted, targetVersion, updating]);
 
   const handleUpdate = async () => {
     if (!latestVersion) return;
     cleanup();
     setUpdating(true);
+    setTargetVersion(latestVersion);
     setStatus("pending");
     setError("");
     setOutput("");
@@ -132,18 +145,16 @@ export function UpdateSection({
           setStatus(result.status as RuntimeUpdateStatus);
 
           if (result.status === "completed") {
-            setOutput(result.output ?? "");
-            setUpdating(false);
-            cleanup();
-            // Auto-clear status after a few seconds so the UI
-            // refreshes to show the new version from the re-fetched runtime data.
-            setTimeout(() => setStatus(null), 5000);
+            markCompleted(
+              result.output ?? `Updated to ${targetVersion ?? latestVersion}`,
+            );
           } else if (
             result.status === "failed" ||
             result.status === "timeout"
           ) {
-            setError(result.error ?? "未知错误");
+            setError(result.error ?? t(($) => $.update.unknown_error));
             setUpdating(false);
+            setTargetVersion(null);
             cleanup();
           }
         } catch {
@@ -152,8 +163,9 @@ export function UpdateSection({
       }, 2000);
     } catch {
       setStatus("failed");
-      setError("发起更新失败");
+      setError(t(($) => $.update.initiate_failed));
       setUpdating(false);
+      setTargetVersion(null);
     }
   };
 
@@ -169,24 +181,24 @@ export function UpdateSection({
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs text-muted-foreground">CLI 版本：</span>
+        <span className="text-xs text-muted-foreground">{t(($) => $.update.cli_version_label)}</span>
         <span className="text-xs font-mono">
-          {currentVersion ?? "未知"}
+          {currentVersion ?? t(($) => $.update.version_unknown)}
         </span>
 
         {isManaged ? (
           <span
             className="inline-flex items-center gap-1 text-xs text-muted-foreground"
-            title="CLI 由 Mortis Desktop 管理，如需升级请更新 Desktop。"
+            title={t(($) => $.update.managed_by_desktop_title)}
           >
-            由 Desktop 管理
+            {t(($) => $.update.managed_by_desktop)}
           </span>
         ) : (
           <>
             {!hasUpdate && currentVersion && latestVersion && !status && (
               <span className="inline-flex items-center gap-1 text-xs text-success">
                 <Check className="h-3 w-3" />
-                已最新
+                {t(($) => $.update.latest)}
               </span>
             )}
 
@@ -196,7 +208,7 @@ export function UpdateSection({
                 <span className="text-xs font-mono text-info">
                   {latestVersion}
                 </span>
-                <span className="text-xs text-muted-foreground">可用</span>
+                <span className="text-xs text-muted-foreground">{t(($) => $.update.available)}</span>
               </>
             )}
 
@@ -208,18 +220,18 @@ export function UpdateSection({
                 disabled={updating}
               >
                 <ArrowUpCircle className="h-3 w-3" />
-                更新
+                {t(($) => $.update.action)}
               </Button>
             )}
           </>
         )}
 
-        {config && Icon && (
+        {config && Icon && status && (
           <span
             className={`inline-flex items-center gap-1 text-xs ${config.color}`}
           >
             <Icon className={`h-3 w-3 ${isActive ? "animate-spin" : ""}`} />
-            {config.label}
+            {t(($) => $.update.status[status])}
           </span>
         )}
       </div>
@@ -240,7 +252,7 @@ export function UpdateSection({
               className="mt-1"
               onClick={handleUpdate}
             >
-              重试
+              {t(($) => $.update.retry)}
             </Button>
           )}
         </div>

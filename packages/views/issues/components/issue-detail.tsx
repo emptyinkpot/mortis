@@ -1,50 +1,26 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useDefaultLayout, usePanelRef } from "react-resizable-panels";
 import { AppLink } from "../../navigation";
 import { useNavigation } from "../../navigation";
 import {
-  ArrowDown,
-  ArrowUp,
+  Archive,
   Calendar,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Link2,
+  CircleCheck,
   MoreHorizontal,
   PanelRight,
   Pin,
   PinOff,
   Plus,
-  Trash2,
-  UserMinus,
   Users,
 } from "lucide-react";
 import { PageHeader } from "../../layout/page-header";
-import { toast } from "sonner";
 import { Skeleton } from "@multica/ui/components/ui/skeleton";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@multica/ui/components/ui/alert-dialog";
 import { Button } from "@multica/ui/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubTrigger,
-  DropdownMenuSubContent,
-} from "@multica/ui/components/ui/dropdown-menu";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@multica/ui/components/ui/resizable";
 import { Sheet, SheetContent } from "@multica/ui/components/ui/sheet";
 import { useIsMobile } from "@multica/ui/hooks/use-mobile";
@@ -57,105 +33,114 @@ import {
 } from "@multica/ui/components/ui/tooltip";
 import { Popover, PopoverTrigger, PopoverContent } from "@multica/ui/components/ui/popover";
 import { Checkbox } from "@multica/ui/components/ui/checkbox";
-import { Command, CommandDialog, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@multica/ui/components/ui/command";
+import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@multica/ui/components/ui/command";
 import { AvatarGroup, AvatarGroupCount } from "@multica/ui/components/ui/avatar";
 import { ActorAvatar } from "../../common/actor-avatar";
-import type {
-  AgentTask,
-  UpdateIssueRequest,
-  IssueStatus,
-  IssuePriority,
-  TimelineEntry,
-  Issue,
-} from "@multica/core/types";
-import { ALL_STATUSES, STATUS_CONFIG, PRIORITY_ORDER, PRIORITY_CONFIG } from "@multica/core/issues/config";
-import { StatusIcon, PriorityIcon, StatusPicker, PriorityPicker, DueDatePicker, AssigneePicker, canAssignAgent } from ".";
+import { PropRow } from "../../common/prop-row";
+import type { Issue, IssueStatus, IssuePriority, TimelineEntry, UpdateIssueRequest } from "@multica/core/types";
+import { STATUS_CONFIG, PRIORITY_CONFIG } from "@multica/core/issues/config";
+import { useUpdateIssue } from "@multica/core/issues/mutations";
+import { toast } from "sonner";
+import { StatusIcon, PriorityIcon, StatusPicker, PriorityPicker, DueDatePicker, AssigneePicker, LabelPicker } from ".";
+import { IssueActionsDropdown, useIssueActions } from "../actions";
 import { ProjectPicker } from "../../projects/components/project-picker";
 import { CommentCard } from "./comment-card";
 import { CommentInput } from "./comment-input";
-import { DiscussionKickoffDialog } from "./discussion-kickoff-dialog";
-import { AgentLiveCard, TaskRunHistory } from "./agent-live-card";
-import { BacklogAgentHintDialog } from "./backlog-agent-hint-dialog";
+import { ResolvedThreadBar } from "./resolved-thread-bar";
+import { collectThreadReplies } from "./thread-utils";
+import { AgentLiveCard } from "./agent-live-card";
+import { ExecutionLogSection } from "./execution-log-section";
 import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@multica/core/auth";
 import { useCurrentWorkspace, useWorkspacePaths } from "@multica/core/paths";
 import { useActorName } from "@multica/core/workspace/hooks";
 import { useWorkspaceId } from "@multica/core/hooks";
 import { issueListOptions, issueDetailOptions, childIssuesOptions, issueUsageOptions } from "@multica/core/issues/queries";
-import { runtimeListOptions } from "@multica/core/runtimes/queries";
 import { memberListOptions, agentListOptions } from "@multica/core/workspace/queries";
-import { useUpdateIssue, useDeleteIssue } from "@multica/core/issues/mutations";
 import { useRecentIssuesStore } from "@multica/core/issues/stores";
+import { useIssueSelectionStore } from "@multica/core/issues/stores/selection-store";
+import { BatchActionToolbar } from "./batch-action-toolbar";
 import { useIssueTimeline } from "../hooks/use-issue-timeline";
 import { useIssueReactions } from "../hooks/use-issue-reactions";
 import { useIssueSubscribers } from "../hooks/use-issue-subscribers";
 import { ReactionBar } from "@multica/ui/components/common/reaction-bar";
 import { useFileUpload } from "@multica/core/hooks/use-file-upload";
 import { api } from "@multica/core/api";
-import { useModalStore } from "@multica/core/modals";
 import { timeAgo } from "@multica/core/utils";
 import { cn } from "@multica/ui/lib/utils";
-import { pinListOptions } from "@multica/core/pins";
-import { useCreatePin, useDeletePin } from "@multica/core/pins";
-import {
-  formatRuntimeMode,
-  formatRuntimeProvider,
-  parseRuntimeIdentity,
-} from "../../runtimes/utils";
 
 import { ProgressRing } from "./progress-ring";
+import { useT } from "../../i18n";
 
 function shortDate(date: string | null): string {
   if (!date) return "—";
-  return new Date(date).toLocaleDateString("zh-CN", {
+  return new Date(date).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
   });
 }
 
-function statusLabel(status: string): string {
-  return STATUS_CONFIG[status as IssueStatus]?.label ?? status;
+type ActivityT = ReturnType<typeof useT<"issues">>["t"];
+
+function statusLabel(status: string, t: ActivityT): string {
+  if (status in STATUS_CONFIG) {
+    return t(($) => $.status[status as IssueStatus]);
+  }
+  return status;
 }
 
-function priorityLabel(priority: string): string {
-  return PRIORITY_CONFIG[priority as IssuePriority]?.label ?? priority;
+function priorityLabel(priority: string, t: ActivityT): string {
+  if (priority in PRIORITY_CONFIG) {
+    return t(($) => $.priority[priority as IssuePriority]);
+  }
+  return priority;
 }
 
 function formatActivity(
   entry: TimelineEntry,
+  t: ActivityT,
   resolveActorName?: (type: string, id: string) => string,
 ): string {
   const details = (entry.details ?? {}) as Record<string, string>;
   switch (entry.action) {
     case "created":
-      return "创建了这个事项";
+      return t(($) => $.activity.created);
     case "status_changed":
-      return `将状态从 ${statusLabel(details.from ?? "?")} 改为 ${statusLabel(details.to ?? "?")}`;
+      return t(($) => $.activity.status_changed, {
+        from: statusLabel(details.from ?? "?", t),
+        to: statusLabel(details.to ?? "?", t),
+      });
     case "priority_changed":
-      return `将优先级从 ${priorityLabel(details.from ?? "?")} 改为 ${priorityLabel(details.to ?? "?")}`;
+      return t(($) => $.activity.priority_changed, {
+        from: priorityLabel(details.from ?? "?", t),
+        to: priorityLabel(details.to ?? "?", t),
+      });
     case "assignee_changed": {
       const isSelfAssign = details.to_type === entry.actor_type && details.to_id === entry.actor_id;
-      if (isSelfAssign) return "将自己指派到这个事项";
+      if (isSelfAssign) return t(($) => $.activity.self_assigned);
       const toName = details.to_id && details.to_type && resolveActorName
         ? resolveActorName(details.to_type, details.to_id)
         : null;
-      if (toName) return `将事项指派给 ${toName}`;
-      if (details.from_id && !details.to_id) return "移除了负责人";
-      return "更新了负责人";
+      if (toName) return t(($) => $.activity.assigned_to, { name: toName });
+      if (details.from_id && !details.to_id) return t(($) => $.activity.removed_assignee);
+      return t(($) => $.activity.changed_assignee);
     }
     case "due_date_changed": {
-      if (!details.to) return "移除了截止日期";
-      const formatted = new Date(details.to).toLocaleDateString("zh-CN", { month: "short", day: "numeric" });
-      return `将截止日期设为 ${formatted}`;
+      if (!details.to) return t(($) => $.activity.due_date_removed);
+      const formatted = new Date(details.to).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      return t(($) => $.activity.due_date_set, { date: formatted });
     }
     case "title_changed":
-      return `将事项标题从 “${details.from ?? "?"}” 改为 “${details.to ?? "?"}”`;
+      return t(($) => $.activity.title_renamed, {
+        from: details.from ?? "?",
+        to: details.to ?? "?",
+      });
     case "description_updated":
-      return "更新了描述";
+      return t(($) => $.activity.description_updated);
     case "task_completed":
-      return "完成了任务";
+      return t(($) => $.activity.task_completed, { count: entry.coalesced_count ?? 1 });
     case "task_failed":
-      return "任务失败";
+      return t(($) => $.activity.task_failed, { count: entry.coalesced_count ?? 1 });
     default:
       return entry.action ?? "";
   }
@@ -172,202 +157,139 @@ function formatTokenCount(n: number): string {
   return String(n);
 }
 
-const TASK_PRIORITY: Record<AgentTask["status"], number> = {
-  running: 0,
-  dispatched: 1,
-  queued: 2,
-  completed: 3,
-  failed: 4,
-  cancelled: 5,
-};
+// Stable reference for threads with no replies. Inline `[]` would create a
+// new array on every render and bust React.memo on CommentCard / ResolvedThreadBar.
+const EMPTY_REPLIES: TimelineEntry[] = [];
 
-function getTaskSortTime(task: AgentTask): number {
-  return new Date(
-    task.started_at ??
-      task.dispatched_at ??
-      task.completed_at ??
-      task.created_at,
-  ).getTime();
-}
-
-function selectPrimaryRuntimeTask(tasks: AgentTask[]): AgentTask | null {
-  return [...tasks]
-    .sort((a, b) => {
-      const priorityDelta = TASK_PRIORITY[a.status] - TASK_PRIORITY[b.status];
-      if (priorityDelta !== 0) return priorityDelta;
-      return getTaskSortTime(b) - getTaskSortTime(a);
-    })[0] ?? null;
-}
-
-function formatTaskStatus(status: AgentTask["status"]): string {
-  switch (status) {
-    case "running":
-      return "运行中";
-    case "dispatched":
-      return "已派发";
-    case "queued":
-      return "排队中";
-    case "completed":
-      return "已完成";
-    case "failed":
-      return "失败";
-    case "cancelled":
-      return "已取消";
-    default:
-      return status;
+// Shallow array equality by element identity. Used to reuse the previous
+// render's per-thread reply slice when nothing in *this* thread changed,
+// even if the surrounding `timeline` array was rebuilt by a WS event in
+// some unrelated thread.
+function shallowEqualEntries(a: TimelineEntry[], b: TimelineEntry[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
   }
+  return true;
 }
 
-function shortRuntimeId(runtimeId: string): string {
-  if (runtimeId.length <= 10) return runtimeId;
-  return `${runtimeId.slice(0, 4)}…${runtimeId.slice(-4)}`;
-}
-
-// ---------------------------------------------------------------------------
-// Property row
-// ---------------------------------------------------------------------------
-
-function PropRow({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+function TimelineSkeleton() {
   return (
-    <div className="flex min-h-8 items-center gap-2 rounded-md px-2 -mx-2 hover:bg-accent/50 transition-colors">
-      <span className="w-16 shrink-0 text-xs text-muted-foreground">{label}</span>
-      <div className="flex min-w-0 flex-1 items-center gap-1.5 text-xs truncate">
-        {children}
-      </div>
+    <div className="mt-4 flex flex-col gap-3">
+      {[0, 1].map((i) => (
+        <div key={i} className="flex gap-3 p-4">
+          <Skeleton className="h-10 w-10 shrink-0 rounded-full" />
+          <div className="flex-1 space-y-2">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-4/5" />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
 
-
 // ---------------------------------------------------------------------------
-// Issue Picker Dialog
+// SubIssueRow — sub-issue list item with inline status & assignee editing
 // ---------------------------------------------------------------------------
 
-function IssuePickerDialog({
-  open,
-  onOpenChange,
-  title,
-  description,
-  excludeIds,
-  onSelect,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  title: string;
-  description: string;
-  excludeIds: string[];
-  onSelect: (issue: Issue) => void;
-}) {
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<Issue[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const abortRef = useRef<AbortController>(undefined);
+function SubIssueRow({ child }: { child: Issue }) {
+  const { t } = useT("issues");
+  const paths = useWorkspacePaths();
+  const updateIssue = useUpdateIssue();
+  const selected = useIssueSelectionStore((s) => s.selectedIds.has(child.id));
+  const toggleSelected = useIssueSelectionStore((s) => s.toggle);
+  const isDone = child.status === "done" || child.status === "cancelled";
 
-  // Reset state when dialog opens/closes
-  useEffect(() => {
-    if (!open) {
-      setQuery("");
-      setResults([]);
-      setIsLoading(false);
-    }
-  }, [open]);
-
-  const search = useCallback(
-    (q: string) => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      if (abortRef.current) abortRef.current.abort();
-
-      if (!q.trim()) {
-        setResults([]);
-        setIsLoading(false);
-        return;
-      }
-
-      setIsLoading(true);
-      debounceRef.current = setTimeout(async () => {
-        const controller = new AbortController();
-        abortRef.current = controller;
-        try {
-          const res = await api.searchIssues({
-            q: q.trim(),
-            limit: 20,
-            include_closed: true,
-            signal: controller.signal,
-          });
-          if (!controller.signal.aborted) {
-            setResults(
-              res.issues.filter((i) => !excludeIds.includes(i.id)),
-            );
-            setIsLoading(false);
-          }
-        } catch {
-          if (!controller.signal.aborted) {
-            setIsLoading(false);
-          }
-        }
-      }, 300);
+  const handleUpdate = useCallback(
+    (updates: Partial<UpdateIssueRequest>) => {
+      updateIssue.mutate(
+        { id: child.id, ...updates },
+        { onError: () => toast.error(t(($) => $.detail.update_failed)) },
+      );
     },
-    [excludeIds],
+    [child.id, updateIssue, t],
   );
 
+  // AppLink wraps only the title/identifier area. Pickers and checkbox are
+  // siblings, so their clicks never navigate — no stopPropagation acrobatics
+  // and no risk of the native checkbox / picker triggers being blocked.
   return (
-    <CommandDialog
-      open={open}
-      onOpenChange={onOpenChange}
-      title={title}
-      description={description}
+    <div
+      className={cn(
+        "flex items-center gap-2.5 px-3 py-2 hover:bg-accent/50 transition-colors group/row",
+        selected && "bg-accent/30",
+      )}
     >
-      <Command shouldFilter={false}>
-        <CommandInput
-          placeholder="搜索事项..."
-          value={query}
-          onValueChange={(v) => {
-            setQuery(v);
-            search(v);
-          }}
+      <div
+        className={cn(
+          "flex h-4 w-4 shrink-0 items-center justify-center transition-opacity",
+          selected
+            ? "opacity-100"
+            : "opacity-0 group-hover/row:opacity-100 focus-within:opacity-100",
+        )}
+      >
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={() => toggleSelected(child.id)}
+          aria-label={`Select ${child.identifier}`}
+          className="cursor-pointer accent-primary"
         />
-        <CommandList>
-          {isLoading && (
-            <div className="py-6 text-center text-sm text-muted-foreground">
-              搜索中...
-            </div>
+      </div>
+      <StatusPicker
+        status={child.status}
+        onUpdate={handleUpdate}
+        align="start"
+        trigger={
+          <StatusIcon
+            status={child.status}
+            className="h-[15px] w-[15px] shrink-0"
+          />
+        }
+      />
+      <AppLink
+        href={paths.issueDetail(child.id)}
+        className="flex min-w-0 flex-1 items-center gap-2.5"
+      >
+        <span className="text-[11px] text-muted-foreground tabular-nums font-medium shrink-0">
+          {child.identifier}
+        </span>
+        <span
+          className={cn(
+            "text-sm truncate flex-1",
+            isDone
+              ? "text-muted-foreground"
+              : "group-hover/row:text-foreground",
           )}
-          {!isLoading && query.trim() && results.length === 0 && (
-            <CommandEmpty>未找到事项。</CommandEmpty>
-          )}
-          {!isLoading && !query.trim() && (
-            <div className="py-6 text-center text-sm text-muted-foreground">
-              输入内容以搜索事项
-            </div>
-          )}
-          {results.length > 0 && (
-            <CommandGroup>
-              {results.map((issue) => (
-                <CommandItem
-                  key={issue.id}
-                  value={issue.id}
-                  onSelect={() => {
-                    onSelect(issue);
-                    onOpenChange(false);
-                  }}
-                >
-                  <StatusIcon status={issue.status} className="h-3.5 w-3.5 shrink-0" />
-                  <span className="text-muted-foreground shrink-0">{issue.identifier}</span>
-                  <span className="truncate">{issue.title}</span>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          )}
-        </CommandList>
-      </Command>
-    </CommandDialog>
+        >
+          {child.title}
+        </span>
+      </AppLink>
+      <AssigneePicker
+        assigneeType={child.assignee_type}
+        assigneeId={child.assignee_id}
+        onUpdate={handleUpdate}
+        align="end"
+        trigger={
+          child.assignee_type && child.assignee_id ? (
+            <ActorAvatar
+              actorType={child.assignee_type}
+              actorId={child.assignee_id}
+              size={20}
+              className="shrink-0"
+            />
+          ) : (
+            <span
+              aria-hidden
+              className="h-5 w-5 rounded-full border border-dashed border-muted-foreground/30 shrink-0"
+            />
+          )
+        }
+      />
+    </div>
   );
 }
 
@@ -378,6 +300,8 @@ function IssuePickerDialog({
 interface IssueDetailProps {
   issueId: string;
   onDelete?: () => void;
+  /** Called after the issue is marked as done via the toolbar button. */
+  onDone?: () => void;
   defaultSidebarOpen?: boolean;
   layoutId?: string;
   /** When set, the issue detail will auto-scroll to this comment and briefly highlight it. */
@@ -388,11 +312,11 @@ interface IssueDetailProps {
 // IssueDetail
 // ---------------------------------------------------------------------------
 
-export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layoutId = "multica_issue_detail_layout", highlightCommentId }: IssueDetailProps) {
+export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = true, layoutId = "multica_issue_detail_layout", highlightCommentId }: IssueDetailProps) {
+  const { t } = useT("issues");
   const id = issueId;
   const router = useNavigation();
   const user = useAuthStore((s) => s.user);
-  const userId = useAuthStore((s) => s.user?.id);
   const workspace = useCurrentWorkspace();
   const paths = useWorkspacePaths();
 
@@ -400,7 +324,13 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
   const wsId = useWorkspaceId();
   const { data: members = [] } = useQuery(memberListOptions(wsId));
   const { data: agents = [] } = useQuery(agentListOptions(wsId));
-  const currentMemberRole = members.find((m) => m.user_id === user?.id)?.role;
+  // Workspace owners and admins moderate any comment authored by anyone
+  // (mirrors backend `comment.go:507-512`). Computed here so per-comment
+  // rendering doesn't have to re-derive it for every row.
+  const currentUserRole =
+    members.find((m) => m.user_id === user?.id)?.role ?? null;
+  const canModerateComments =
+    currentUserRole === "owner" || currentUserRole === "admin";
   const { data: allIssues = [] } = useQuery(issueListOptions(wsId));
   const { getActorName } = useActorName();
   const { uploadWithToast } = useFileUpload(api);
@@ -409,28 +339,42 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
   });
   const sidebarRef = usePanelRef();
   const isMobile = useIsMobile();
-  const [sidebarOpen, setSidebarOpen] = useState(defaultSidebarOpen);
+  const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(defaultSidebarOpen);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   useEffect(() => {
     if (isMobile) {
-      setSidebarOpen(false);
-      sidebarRef.current?.collapse();
+      setMobileSidebarOpen(false);
     }
   }, [isMobile]);
-  const [deleting, setDeleting] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [backlogHintOpen, setBacklogHintOpen] = useState(false);
+  const sidebarOpen = isMobile ? mobileSidebarOpen : desktopSidebarOpen;
   const [propertiesOpen, setPropertiesOpen] = useState(true);
   const [detailsOpen, setDetailsOpen] = useState(true);
   const [parentIssueOpen, setParentIssueOpen] = useState(true);
-  const [runtimeSummaryOpen, setRuntimeSummaryOpen] = useState(true);
   const [tokenUsageOpen, setTokenUsageOpen] = useState(true);
-  const [discussionDialogOpen, setDiscussionDialogOpen] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
+
+  // Per-session: which resolved threads the user has temporarily expanded.
+  // Not persisted (matches Linear) — reload collapses everything back to bars.
+  const [expandedResolved, setExpandedResolved] = useState<Set<string>>(() => new Set());
+  const toggleResolvedExpand = useCallback((commentId: string, expand: boolean) => {
+    setExpandedResolved((prev) => {
+      const next = new Set(prev);
+      if (expand) next.add(commentId);
+      else next.delete(commentId);
+      return next;
+    });
+  }, []);
+  const clearResolvedExpand = useCallback((commentId: string) => {
+    setExpandedResolved((prev) => {
+      if (!prev.has(commentId)) return prev;
+      const next = new Set(prev);
+      next.delete(commentId);
+      return next;
+    });
+  }, []);
   const didHighlightRef = useRef<string | null>(null);
-  const [parentPickerOpen, setParentPickerOpen] = useState(false);
-  const [childPickerOpen, setChildPickerOpen] = useState(false);
 
   // Issue data from TQ — uses detail query, seeded from list cache if available.
   // Only seed when description is present; list API omits it, and ContentEditor
@@ -451,11 +395,134 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
     }
   }, [issue?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Fire `onDelete` once when the issue transitions from loaded to missing.
+  // Delete goes through a shell-level modal, so the caller (e.g. inbox) can't
+  // be notified directly — instead, the detail page observes its own cache
+  // clearing and runs the callback. We navigate via `onDeletedNavigateTo` on
+  // the actions menu when no callback is supplied (standalone routes).
+  const hadIssueRef = useRef(false);
+  const firedDeleteCallbackRef = useRef(false);
+  useEffect(() => {
+    if (issue) {
+      hadIssueRef.current = true;
+      firedDeleteCallbackRef.current = false;
+      return;
+    }
+    if (
+      hadIssueRef.current &&
+      !issueLoading &&
+      !firedDeleteCallbackRef.current &&
+      onDelete
+    ) {
+      firedDeleteCallbackRef.current = true;
+      onDelete();
+    }
+  }, [issue, issueLoading, onDelete]);
+
   // Custom hooks — encapsulate timeline, reactions, subscribers
   const {
-    timeline, submitComment, submitReply,
-    editComment, deleteComment, toggleReaction: handleToggleReaction,
+    timeline, loading: timelineLoading,
+    submitComment, submitReply,
+    editComment, deleteComment, toggleResolveComment, toggleReaction: handleToggleReaction,
   } = useIssueTimeline(id, user?.id);
+
+  // Resolve / unresolve must always clear the per-session expand entry so
+  // re-resolving an already-expanded thread folds it back to the bar (the
+  // expand Set is keyed only on commentId, not on resolution state). Without
+  // this wrapper, an expand → unresolve → resolve sequence keeps the thread
+  // visually expanded after the second resolve.
+  const handleResolveToggle = useCallback(
+    (commentId: string, resolved: boolean) => {
+      clearResolvedExpand(commentId);
+      toggleResolveComment(commentId, resolved);
+    },
+    [clearResolvedExpand, toggleResolveComment],
+  );
+
+  // Memoized timeline grouping. Each render rebuilds the per-parent map from
+  // the latest timeline, then pre-flattens each thread's reply subtree into a
+  // dedicated `threadReplies` slice per root. Slices are stabilized against
+  // the previous render via `prevThreadRepliesRef`: if a thread's flat list
+  // is shallow-equal to the previous one, we reuse the previous array so
+  // React.memo on CommentCard / ResolvedThreadBar can short-circuit. Without
+  // this, every WS event (including reactions, edits, AI streaming on an
+  // unrelated thread) hands every card a brand-new prop reference and forces
+  // every thread subtree to re-render in lockstep.
+  const prevThreadRepliesRef = useRef<Map<string, TimelineEntry[]>>(new Map());
+  const timelineView = useMemo(() => {
+    // Group entries: top-level = activities + root comments; replies are
+    // bucketed under their parent's id and rendered nested inside CommentCard.
+    // No orphan rescue needed: the timeline is fetched in full, so every
+    // reply's parent is always in the same array.
+    const topLevel = timeline.filter(
+      (e) => e.type === "activity" || !e.parent_id,
+    );
+    const repliesByParent = new Map<string, TimelineEntry[]>();
+    for (const e of timeline) {
+      if (e.type === "comment" && e.parent_id) {
+        const list = repliesByParent.get(e.parent_id) ?? [];
+        list.push(e);
+        repliesByParent.set(e.parent_id, list);
+      }
+    }
+
+    // Pre-flatten each top-level comment's thread subtree (parent + every
+    // descendant in render order). Reuse the previous array reference when
+    // the thread is unchanged so unrelated CommentCards keep their memo.
+    const prevThreadReplies = prevThreadRepliesRef.current;
+    const threadReplies = new Map<string, TimelineEntry[]>();
+    for (const root of topLevel) {
+      if (root.type !== "comment") continue;
+      const fresh = collectThreadReplies(root.id, repliesByParent);
+      const previous = prevThreadReplies.get(root.id);
+      threadReplies.set(
+        root.id,
+        previous && shallowEqualEntries(previous, fresh) ? previous : fresh,
+      );
+    }
+    prevThreadRepliesRef.current = threadReplies;
+
+    // Coalesce consecutive activities from the same actor + action.
+    // - task_completed / task_failed: no time limit (these repeat across runs)
+    // - all other actions: within a 2-minute window
+    const COALESCE_MS = 2 * 60 * 1000;
+    const NO_TIME_LIMIT_ACTIONS = new Set(["task_completed", "task_failed"]);
+    const coalesced: TimelineEntry[] = [];
+    for (const entry of topLevel) {
+      if (entry.type === "activity") {
+        const prev = coalesced[coalesced.length - 1];
+        if (
+          prev?.type === "activity" &&
+          prev.action === entry.action &&
+          prev.actor_type === entry.actor_type &&
+          prev.actor_id === entry.actor_id &&
+          (NO_TIME_LIMIT_ACTIONS.has(entry.action!) ||
+            Math.abs(new Date(entry.created_at).getTime() - new Date(prev.created_at).getTime()) <= COALESCE_MS)
+        ) {
+          coalesced[coalesced.length - 1] = { ...entry, coalesced_count: (prev.coalesced_count ?? 1) + 1 };
+          continue;
+        }
+      }
+      coalesced.push(entry);
+    }
+
+    // Group consecutive activities together so the connector line works
+    const groups: { type: "activities" | "comment"; entries: TimelineEntry[] }[] = [];
+    for (const entry of coalesced) {
+      if (entry.type === "activity") {
+        const last = groups[groups.length - 1];
+        if (last?.type === "activities") {
+          last.entries.push(entry);
+        } else {
+          groups.push({ type: "activities", entries: [entry] });
+        }
+      } else {
+        groups.push({ type: "comment", entries: [entry] });
+      }
+    }
+
+    return { threadReplies, groups };
+  }, [timeline]);
 
   const {
     reactions: issueReactions,
@@ -468,24 +535,6 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
 
   // Token usage
   const { data: usage } = useQuery(issueUsageOptions(id));
-  const { data: runtimes = [] } = useQuery({
-    ...runtimeListOptions(wsId),
-    enabled: !!workspace,
-  });
-  const { data: issueTasks = [] } = useQuery({
-    queryKey: ["issues", wsId, id, "task-runs"],
-    queryFn: () => api.listTasksByIssue(id),
-    enabled: !!issue,
-  });
-
-  // Pinned state
-  const { data: pinnedItems = [] } = useQuery({
-    ...pinListOptions(wsId, userId ?? ""),
-    enabled: !!userId,
-  });
-  const isPinned = pinnedItems.some((p) => p.item_type === "issue" && p.item_id === id);
-  const createPin = useCreatePin();
-  const deletePin = useDeletePin();
 
   // Sub-issue queries
   const parentIssueId = issue?.parent_issue_id;
@@ -506,36 +555,31 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
   });
   const [subIssuesCollapsed, setSubIssuesCollapsed] = useState(false);
 
-  const primaryRuntimeTask = selectPrimaryRuntimeTask(issueTasks);
-  const linkedRuntime = primaryRuntimeTask
-    ? runtimes.find((runtime) => runtime.id === primaryRuntimeTask.runtime_id) ?? null
-    : null;
-  const runtimeIdentity = linkedRuntime ? parseRuntimeIdentity(linkedRuntime) : null;
-  const runtimeHref = primaryRuntimeTask?.runtime_id
-    ? `${paths.runtimes()}?runtime=${encodeURIComponent(primaryRuntimeTask.runtime_id)}`
-    : "";
-  const runtimeSummary = primaryRuntimeTask
-    ? {
-        task: primaryRuntimeTask,
-        runtime: linkedRuntime,
-        title: runtimeIdentity?.title || linkedRuntime?.name || "运行时",
-        subtitle:
-          runtimeIdentity?.summary ||
-          linkedRuntime?.device_info ||
-          linkedRuntime?.launch_header ||
-          "未上报运行时元数据",
-      }
-    : null;
-  const runtimeStatusText = runtimeSummary?.runtime
-    ? runtimeSummary.runtime.status === "online"
-      ? "在线"
-      : "离线"
-    : "未知";
+  // Selection store is global (workspace-scoped); clear it whenever this
+  // issue detail is mounted or switched, so leftover selections from the
+  // main list view (or another sub-issue list) don't leak into this one.
+  const clearSelection = useIssueSelectionStore((s) => s.clear);
+  const selectedIds = useIssueSelectionStore((s) => s.selectedIds);
+  const selectIds = useIssueSelectionStore((s) => s.select);
+  const deselectIds = useIssueSelectionStore((s) => s.deselect);
+  useEffect(() => {
+    clearSelection();
+    return clearSelection;
+  }, [id, clearSelection]);
+
+  const childIssueIds = useMemo(() => childIssues.map((c) => c.id), [childIssues]);
+  const childSelectedCount = childIssueIds.filter((cid) =>
+    selectedIds.has(cid),
+  ).length;
+  const allChildrenSelected =
+    childIssueIds.length > 0 && childSelectedCount === childIssueIds.length;
+  const someChildrenSelected = childSelectedCount > 0;
+  const handleToggleSelectAllChildren = useCallback(() => {
+    if (allChildrenSelected) deselectIds(childIssueIds);
+    else selectIds(childIssueIds);
+  }, [allChildrenSelected, childIssueIds, deselectIds, selectIds]);
 
   const loading = issueLoading;
-  const discussionAgents = agents.filter(
-    (agent) => !agent.archived_at && canAssignAgent(agent, user?.id, currentMemberRole),
-  );
 
   // Scroll to highlighted comment once timeline loads (fire only once per highlightCommentId)
   useEffect(() => {
@@ -545,36 +589,13 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
     if (el) {
       didHighlightRef.current = highlightCommentId;
       requestAnimationFrame(() => {
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.scrollIntoView({ behavior: "instant", block: "center" });
         setHighlightedId(highlightCommentId);
         const timer = setTimeout(() => setHighlightedId(null), 2000);
         return () => clearTimeout(timer);
       });
     }
   }, [highlightCommentId, timeline.length]);
-
-  // Issue field updates via TQ mutation (optimistic update + rollback in mutation hook)
-  const updateIssueMutation = useUpdateIssue();
-  const handleUpdateField = useCallback(
-    (updates: Partial<UpdateIssueRequest>) => {
-      if (!issue) return;
-      updateIssueMutation.mutate(
-        { id, ...updates },
-        { onError: () => toast.error("Failed to update issue") },
-      );
-      // Hint: assigning an agent to a backlog issue won't trigger execution
-      // until the issue is moved to an active status.
-      if (
-        updates.assignee_type === "agent" &&
-        updates.assignee_id &&
-        issue.status === "backlog" &&
-        localStorage.getItem("multica:backlog-agent-hint-dismissed") !== "true"
-      ) {
-        setBacklogHintOpen(true);
-      }
-    },
-    [issue, id, updateIssueMutation],
-  );
 
   const descEditorRef = useRef<ContentEditorRef>(null);
   const { isDragOver: descDragOver, dropZoneProps: descDropZoneProps } = useFileDropZone({
@@ -587,19 +608,22 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
     [uploadWithToast],
   );
 
-  const deleteIssueMutation = useDeleteIssue();
-  const handleDelete = async () => {
-    setDeleting(true);
-    try {
-      await deleteIssueMutation.mutateAsync(issue!.id);
-      toast.success("事项已删除");
-      if (onDelete) onDelete();
-      else router.push(paths.issues());
-    } catch {
-      toast.error("删除事项失败");
-      setDeleting(false);
+  // Shared issue actions (mutations, pin, copy-link, modal dispatch, etc.).
+  // Called before the `if (!issue)` early return so hook order stays stable.
+  const actions = useIssueActions(issue);
+  const handleUpdateField = actions.updateField;
+
+  const handleToggleSidebar = useCallback(() => {
+    if (isMobile) {
+      setMobileSidebarOpen((open) => !open);
+      return;
     }
-  };
+
+    const panel = sidebarRef.current;
+    if (!panel) return;
+    if (panel.isCollapsed()) panel.expand();
+    else panel.collapse();
+  }, [isMobile, sidebarRef]);
 
   if (loading) {
     return (
@@ -654,11 +678,11 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
   if (!issue) {
     return (
       <div className="flex flex-1 min-h-0 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
-        <p>该事项不存在，或已在当前工作区中被删除。</p>
+        <p>{t(($) => $.detail.not_found)}</p>
         {!onDelete && (
           <Button variant="outline" size="sm" onClick={() => router.push(paths.issues())}>
             <ChevronLeft className="mr-1 h-3.5 w-3.5" />
-            返回事项列表
+            {t(($) => $.detail.back_to_issues)}
           </Button>
         )}
       </div>
@@ -667,42 +691,45 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
 
   const sidebarContent = (
     <div className="space-y-5">
-      {/* 属性 */}
+      {/* Properties */}
       <div>
         <button
           className={`flex w-full items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors mb-2 hover:bg-accent/70 ${propertiesOpen ? "" : "text-muted-foreground hover:text-foreground"}`}
           onClick={() => setPropertiesOpen(!propertiesOpen)}
         >
-          属性
+          {t(($) => $.detail.section_properties)}
           <ChevronRight className={`!size-3 shrink-0 stroke-[2.5] text-muted-foreground transition-transform ${propertiesOpen ? "rotate-90" : ""}`} />
         </button>
-        {propertiesOpen && <div className="space-y-0.5 pl-2">
-          <PropRow label="状态">
+        {propertiesOpen && <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 pl-2">
+          <PropRow label={t(($) => $.detail.prop_status)}>
             <StatusPicker status={issue.status} onUpdate={handleUpdateField} align="start" />
           </PropRow>
-          <PropRow label="优先级">
+          <PropRow label={t(($) => $.detail.prop_priority)}>
             <PriorityPicker priority={issue.priority} onUpdate={handleUpdateField} align="start" />
           </PropRow>
-          <PropRow label="负责人">
+          <PropRow label={t(($) => $.detail.prop_assignee)}>
             <AssigneePicker assigneeType={issue.assignee_type} assigneeId={issue.assignee_id} onUpdate={handleUpdateField} align="start" />
           </PropRow>
-          <PropRow label="截止日期">
+          <PropRow label={t(($) => $.detail.prop_due_date)}>
             <DueDatePicker dueDate={issue.due_date} onUpdate={handleUpdateField} />
           </PropRow>
-          <PropRow label="项目">
+          <PropRow label={t(($) => $.detail.prop_project)}>
             <ProjectPicker projectId={issue.project_id} onUpdate={handleUpdateField} />
+          </PropRow>
+          <PropRow label={t(($) => $.detail.prop_labels)}>
+            <LabelPicker issueId={issue.id} align="start" />
           </PropRow>
         </div>}
       </div>
 
-      {/* 父事项 */}
+      {/* Parent issue */}
       {parentIssue && (
         <div>
           <button
             className={`flex w-full items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors mb-2 hover:bg-accent/70 ${parentIssueOpen ? "" : "text-muted-foreground hover:text-foreground"}`}
             onClick={() => setParentIssueOpen(!parentIssueOpen)}
           >
-            父事项
+            {t(($) => $.detail.section_parent_issue)}
             <ChevronRight className={`!size-3 shrink-0 stroke-[2.5] text-muted-foreground transition-transform ${parentIssueOpen ? "rotate-90" : ""}`} />
           </button>
           {parentIssueOpen && <div className="pl-2">
@@ -718,99 +745,33 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
         </div>
       )}
 
-      {/* 详情 */}
+      {/* Details */}
       <div>
         <button
           className={`flex w-full items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors mb-2 hover:bg-accent/70 ${detailsOpen ? "" : "text-muted-foreground hover:text-foreground"}`}
           onClick={() => setDetailsOpen(!detailsOpen)}
         >
-          详情
+          {t(($) => $.detail.section_details)}
           <ChevronRight className={`!size-3 shrink-0 stroke-[2.5] text-muted-foreground transition-transform ${detailsOpen ? "rotate-90" : ""}`} />
         </button>
-        {detailsOpen && <div className="space-y-0.5 pl-2">
-          <PropRow label="创建者">
-            <ActorAvatar actorType={issue.creator_type} actorId={issue.creator_id} size={18} />
-            <span className="truncate">{getActorName(issue.creator_type, issue.creator_id)}</span>
+        {detailsOpen && <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 pl-2">
+          <PropRow label={t(($) => $.detail.prop_created_by)}>
+            <ActorAvatar actorType={issue.creator_type} actorId={issue.creator_id} size={18} enableHoverCard />
+            <span className="cursor-pointer truncate">{getActorName(issue.creator_type, issue.creator_id)}</span>
           </PropRow>
-          <PropRow label="创建时间">
+          <PropRow label={t(($) => $.detail.prop_created)}>
             <span className="text-muted-foreground">{shortDate(issue.created_at)}</span>
           </PropRow>
-          <PropRow label="更新时间">
+          <PropRow label={t(($) => $.detail.prop_updated)}>
             <span className="text-muted-foreground">{shortDate(issue.updated_at)}</span>
           </PropRow>
         </div>}
       </div>
 
-      {runtimeSummary && (
-        <div>
-          <button
-            className={`flex w-full items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors mb-2 hover:bg-accent/70 ${runtimeSummaryOpen ? "" : "text-muted-foreground hover:text-foreground"}`}
-            onClick={() => setRuntimeSummaryOpen(!runtimeSummaryOpen)}
-          >
-            运行时
-            <ChevronRight className={`!size-3 shrink-0 stroke-[2.5] text-muted-foreground transition-transform ${runtimeSummaryOpen ? "rotate-90" : ""}`} />
-          </button>
-          {runtimeSummaryOpen && (
-            <div className="space-y-0.5 pl-2">
-              <PropRow label="运行时">
-                <span className="truncate">{runtimeSummary.title}</span>
-              </PropRow>
-              <PropRow label="状态">
-                <span
-                  className={cn(
-                    "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium",
-                    runtimeSummary.runtime?.status === "online"
-                      ? "bg-success/10 text-success"
-                      : runtimeSummary.runtime
-                        ? "bg-muted text-muted-foreground"
-                        : "bg-warning/10 text-warning",
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "size-1.5 rounded-full",
-                      runtimeSummary.runtime?.status === "online"
-                        ? "bg-success"
-                        : runtimeSummary.runtime
-                          ? "bg-muted-foreground/60"
-                          : "bg-warning",
-                    )}
-                  />
-                  {runtimeStatusText}
-                </span>
-                <span className="truncate text-muted-foreground">
-                  {formatTaskStatus(runtimeSummary.task.status)}
-                </span>
-              </PropRow>
-              <PropRow label="摘要">
-                <span className="truncate text-muted-foreground">{runtimeSummary.subtitle}</span>
-              </PropRow>
-              {runtimeSummary.runtime && (
-                <PropRow label="提供方">
-                  <span className="truncate text-muted-foreground">
-                    {formatRuntimeProvider(runtimeSummary.runtime.provider)} ·{" "}
-                    {formatRuntimeMode(runtimeSummary.runtime.runtime_mode)}
-                  </span>
-                </PropRow>
-              )}
-              <PropRow label="运行时 ID">
-                <span className="font-mono text-[11px] text-muted-foreground">
-                  {shortRuntimeId(runtimeSummary.task.runtime_id)}
-                </span>
-              </PropRow>
-              <PropRow label="打开">
-                <AppLink
-                  href={runtimeHref}
-                  className="inline-flex items-center gap-1 rounded-md px-2 py-1 -ml-2 text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
-                >
-                  <Link2 className="h-3 w-3" />
-                  <span>打开运行时</span>
-                </AppLink>
-              </PropRow>
-            </div>
-          )}
-        </div>
-      )}
+      {/* Execution log — active runs + collapsed past runs. Self-contained;
+          owns its own collapse state and WS subscriptions. Hides itself
+          when there are no runs to show. */}
+      <ExecutionLogSection issueId={id} />
 
       {/* Token usage */}
       {usage && usage.task_count > 0 && (
@@ -819,24 +780,27 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
             className={`flex w-full items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors mb-2 hover:bg-accent/70 ${tokenUsageOpen ? "" : "text-muted-foreground hover:text-foreground"}`}
             onClick={() => setTokenUsageOpen(!tokenUsageOpen)}
           >
-            令牌用量
+            {t(($) => $.detail.section_token_usage)}
             <ChevronRight className={`!size-3 shrink-0 stroke-[2.5] text-muted-foreground transition-transform ${tokenUsageOpen ? "rotate-90" : ""}`} />
           </button>
-          {tokenUsageOpen && <div className="space-y-0.5 pl-2">
-            <PropRow label="Input">
+          {tokenUsageOpen && <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 pl-2">
+            <PropRow label={t(($) => $.detail.prop_input)}>
               <span className="text-muted-foreground">{formatTokenCount(usage.total_input_tokens)}</span>
             </PropRow>
-            <PropRow label="Output">
+            <PropRow label={t(($) => $.detail.prop_output)}>
               <span className="text-muted-foreground">{formatTokenCount(usage.total_output_tokens)}</span>
             </PropRow>
             {(usage.total_cache_read_tokens > 0 || usage.total_cache_write_tokens > 0) && (
-              <PropRow label="Cache">
+              <PropRow label={t(($) => $.detail.prop_cache)}>
                 <span className="text-muted-foreground">
-                  读 {formatTokenCount(usage.total_cache_read_tokens)} / 写 {formatTokenCount(usage.total_cache_write_tokens)}
+                  {t(($) => $.detail.prop_cache_value, {
+                    read: formatTokenCount(usage.total_cache_read_tokens),
+                    write: formatTokenCount(usage.total_cache_write_tokens),
+                  })}
                 </span>
               </PropRow>
             )}
-            <PropRow label="Runs">
+            <PropRow label={t(($) => $.detail.prop_runs)}>
               <span className="text-muted-foreground">{usage.task_count}</span>
             </PropRow>
           </div>}
@@ -845,10 +809,8 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
     </div>
   );
 
-  return (
-    <ResizablePanelGroup orientation="horizontal" className="flex-1 min-h-0" defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged}>
-      <ResizablePanel id="content" minSize="50%">
-      <div className="flex h-full flex-col">
+  const detailContent = (
+    <div className="flex h-full min-w-0 flex-1 flex-col">
         <PageHeader className="gap-2 bg-background text-sm">
           <div className="flex flex-1 items-center gap-1.5 min-w-0">
             {workspace && (
@@ -873,214 +835,75 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                 <ChevronRight className="h-3 w-3 text-muted-foreground/50 shrink-0" />
               </>
             )}
-            <span className="shrink-0">
+            <span className="text-muted-foreground tabular-nums shrink-0">
               {issue.identifier}
+            </span>
+            <span className="truncate font-medium text-foreground">
+              {issue.title}
             </span>
           </div>
           <div className="flex items-center gap-1 shrink-0">
+            {onDone && issue.status !== "done" && issue.status !== "cancelled" && (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-muted-foreground"
+                      onClick={() => { handleUpdateField({ status: "done" }); onDone?.(); }}
+                    >
+                      <CircleCheck />
+                    </Button>
+                  }
+                />
+                <TooltipContent side="bottom">{t(($) => $.detail.mark_done_tooltip)}</TooltipContent>
+              </Tooltip>
+            )}
+            {onDone && issue.status === "done" && (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-muted-foreground"
+                      onClick={() => { onDone(); }}
+                    >
+                      <Archive />
+                    </Button>
+                  }
+                />
+                <TooltipContent side="bottom">{t(($) => $.detail.archive_tooltip)}</TooltipContent>
+              </Tooltip>
+            )}
             <Tooltip>
               <TooltipTrigger
                 render={
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    className={cn("text-muted-foreground", isPinned && "text-foreground")}
-                    onClick={() => {
-                      if (isPinned) {
-                        deletePin.mutate({ itemType: "issue", itemId: issue.id });
-                      } else {
-                        createPin.mutate({ item_type: "issue", item_id: issue.id });
-                      }
-                    }}
+                    className={cn("text-muted-foreground", actions.isPinned && "text-foreground")}
+                    onClick={actions.togglePin}
                   >
-                    {isPinned ? <PinOff /> : <Pin />}
+                    {actions.isPinned ? <PinOff /> : <Pin />}
                   </Button>
                 }
               />
-              <TooltipContent side="bottom">{isPinned ? "从侧边栏取消固定" : "固定到侧边栏"}</TooltipContent>
+              <TooltipContent side="bottom">{actions.isPinned ? t(($) => $.detail.unpin_tooltip) : t(($) => $.detail.pin_tooltip)}</TooltipContent>
             </Tooltip>
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button variant="ghost" size="icon-sm" className="text-muted-foreground">
-                    <MoreHorizontal />
-                  </Button>
-                }
-              />
-              <DropdownMenuContent align="end" className="w-auto">
-                {/* Status */}
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger>
-                    <StatusIcon status={issue.status} className="h-3.5 w-3.5" />
-                    状态
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent>
-                    {ALL_STATUSES.map((s) => (
-                      <DropdownMenuItem
-                        key={s}
-                        onClick={() => handleUpdateField({ status: s })}
-                      >
-                        <StatusIcon status={s} className="h-3.5 w-3.5" />
-                        {STATUS_CONFIG[s].label}
-                        {issue.status === s && <span className="ml-auto text-xs text-muted-foreground">✓</span>}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-
-                {/* Priority */}
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger>
-                    <PriorityIcon priority={issue.priority} />
-                    优先级
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent>
-                    {PRIORITY_ORDER.map((p) => (
-                      <DropdownMenuItem
-                        key={p}
-                        onClick={() => handleUpdateField({ priority: p })}
-                      >
-                        <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium ${PRIORITY_CONFIG[p].badgeBg} ${PRIORITY_CONFIG[p].badgeText}`}>
-                          <PriorityIcon priority={p} className="h-3 w-3" inheritColor />
-                          {PRIORITY_CONFIG[p].label}
-                        </span>
-                        {issue.priority === p && <span className="ml-auto text-xs text-muted-foreground">✓</span>}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-
-                {/* Assignee */}
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger>
-                    <UserMinus className="h-3.5 w-3.5" />
-                    负责人
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent>
-                    <DropdownMenuItem
-                      onClick={() => handleUpdateField({ assignee_type: null, assignee_id: null })}
-                    >
-                      <UserMinus className="h-3.5 w-3.5 text-muted-foreground" />
-                      未指派
-                      {!issue.assignee_type && <span className="ml-auto text-xs text-muted-foreground">✓</span>}
-                    </DropdownMenuItem>
-                    {members.map((m) => (
-                      <DropdownMenuItem
-                        key={m.user_id}
-                        onClick={() => handleUpdateField({ assignee_type: "member", assignee_id: m.user_id })}
-                      >
-                        <ActorAvatar actorType="member" actorId={m.user_id} size={16} />
-                        {m.name}
-                        {issue.assignee_type === "member" && issue.assignee_id === m.user_id && <span className="ml-auto text-xs text-muted-foreground">✓</span>}
-                      </DropdownMenuItem>
-                    ))}
-                    {agents.filter((a) => !a.archived_at && canAssignAgent(a, user?.id, currentMemberRole)).map((a) => (
-                      <DropdownMenuItem
-                        key={a.id}
-                        onClick={() => handleUpdateField({ assignee_type: "agent", assignee_id: a.id })}
-                      >
-                        <ActorAvatar actorType="agent" actorId={a.id} size={16} />
-                        {a.name}
-                        {issue.assignee_type === "agent" && issue.assignee_id === a.id && <span className="ml-auto text-xs text-muted-foreground">✓</span>}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-
-                {/* Due date */}
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger>
-                    <Calendar className="h-3.5 w-3.5" />
-                    截止日期
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent>
-                    <DropdownMenuItem onClick={() => handleUpdateField({ due_date: new Date().toISOString() })}>
-                      今天
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => {
-                      const d = new Date(); d.setDate(d.getDate() + 1);
-                      handleUpdateField({ due_date: d.toISOString() });
-                    }}>
-                      明天
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => {
-                      const d = new Date(); d.setDate(d.getDate() + 7);
-                      handleUpdateField({ due_date: d.toISOString() });
-                    }}>
-                      下周
-                    </DropdownMenuItem>
-                    {issue.due_date && (
-                      <>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => handleUpdateField({ due_date: null })}>
-                          清除日期
-                        </DropdownMenuItem>
-                      </>
-                    )}
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-
-                <DropdownMenuSeparator />
-
-                {/* Create sub-issue */}
-                <DropdownMenuItem onClick={() => {
-                  useModalStore.getState().open("create-issue", {
-                    parent_issue_id: issue.id,
-                    parent_issue_identifier: issue.identifier,
-                  });
-                }}>
-                  <Plus className="h-3.5 w-3.5" />
-                  创建子事项
-                </DropdownMenuItem>
-
-                {/* Add as sub-issue of another issue */}
-                <DropdownMenuItem onClick={() => setParentPickerOpen(true)}>
-                  <ArrowUp className="h-3.5 w-3.5" />
-                  设置父事项...
-                </DropdownMenuItem>
-
-                {/* Add another issue as sub-issue */}
-                <DropdownMenuItem onClick={() => setChildPickerOpen(true)}>
-                  <ArrowDown className="h-3.5 w-3.5" />
-                  添加子事项...
-                </DropdownMenuItem>
-
-                {/* Pin / Unpin */}
-                <DropdownMenuItem onClick={() => {
-                  if (isPinned) {
-                    deletePin.mutate({ itemType: "issue", itemId: issue.id });
-                  } else {
-                    createPin.mutate({ item_type: "issue", item_id: issue.id });
-                  }
-                }}>
-                  {isPinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
-                  {isPinned ? "从侧边栏取消固定" : "固定到侧边栏"}
-                </DropdownMenuItem>
-
-                {/* Copy link */}
-                <DropdownMenuItem onClick={() => {
-                  const url = router.getShareableUrl
-                    ? router.getShareableUrl(router.pathname)
-                    : window.location.href;
-                  navigator.clipboard.writeText(url);
-                  toast.success("链接已复制");
-                }}>
-                  <Link2 className="h-3.5 w-3.5" />
-                  复制链接
-                </DropdownMenuItem>
-
-                <DropdownMenuSeparator />
-
-                {/* Delete */}
-                <DropdownMenuItem
-                  variant="destructive"
-                  onClick={() => setDeleteDialogOpen(true)}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  删除事项
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <IssueActionsDropdown
+              issue={issue}
+              align="end"
+              // When a parent passes `onDelete`, we detect deletion via effect
+              // above and skip navigation. Otherwise the modal navigates for us.
+              onDeletedNavigateTo={onDelete ? undefined : paths.issues()}
+              trigger={
+                <Button variant="ghost" size="icon-sm" className="text-muted-foreground">
+                  <MoreHorizontal />
+                </Button>
+              }
+            />
             <Tooltip>
               <TooltipTrigger
                 render={
@@ -1088,91 +911,16 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                     variant={sidebarOpen ? "secondary" : "ghost"}
                     size="icon-sm"
                     className={sidebarOpen ? "" : "text-muted-foreground"}
-                    onClick={() => {
-                      if (isMobile) {
-                        setSidebarOpen(!sidebarOpen);
-                      } else {
-                        const panel = sidebarRef.current;
-                        if (!panel) return;
-                        if (panel.isCollapsed()) panel.expand();
-                        else panel.collapse();
-                      }
-                    }}
+                    onClick={handleToggleSidebar}
                   >
                     <PanelRight />
                   </Button>
                 }
               />
-              <TooltipContent side="bottom">Toggle sidebar</TooltipContent>
+              <TooltipContent side="bottom">{t(($) => $.detail.sidebar_tooltip)}</TooltipContent>
             </Tooltip>
           </div>
         </PageHeader>
-
-            {/* Delete confirmation dialog (controlled by state) */}
-            <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>删除事项</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    这会永久删除该事项及其所有评论，此操作无法撤销。
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>取消</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={handleDelete}
-                    disabled={deleting}
-                    className="bg-destructive text-white hover:bg-destructive/90"
-                  >
-                    {deleting ? "删除中..." : "删除"}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-
-            <BacklogAgentHintDialog
-              open={backlogHintOpen}
-              onOpenChange={setBacklogHintOpen}
-              onDismissPermanently={() => {
-                localStorage.setItem("multica:backlog-agent-hint-dismissed", "true");
-              }}
-              onMoveToTodo={() => {
-                updateIssueMutation.mutate(
-                  { id, status: "todo" },
-                  { onError: () => toast.error("Failed to update status") },
-                );
-                setBacklogHintOpen(false);
-              }}
-            />
-
-            {/* Set parent issue picker */}
-            <IssuePickerDialog
-              open={parentPickerOpen}
-              onOpenChange={setParentPickerOpen}
-              title="设置父事项"
-              description="搜索要设为当前事项父事项的目标"
-              excludeIds={[id, ...childIssues.map((c) => c.id)]}
-              onSelect={(selected) => {
-                handleUpdateField({ parent_issue_id: selected.id });
-                toast.success(`Set ${selected.identifier} as parent issue`);
-              }}
-            />
-
-            {/* Add sub-issue picker */}
-            <IssuePickerDialog
-              open={childPickerOpen}
-              onOpenChange={setChildPickerOpen}
-              title="添加子事项"
-              description="搜索要添加为子事项的目标"
-              excludeIds={[id, ...(parentIssueId ? [parentIssueId] : []), ...childIssues.map((c) => c.id)]}
-              onSelect={(selected) => {
-                updateIssueMutation.mutate(
-                  { id: selected.id, parent_issue_id: id },
-                  { onError: () => toast.error("Failed to add sub-issue") },
-                );
-                toast.success(`Added ${selected.identifier} as sub-issue`);
-              }}
-            />
 
         {/* Content — scrollable */}
         <div ref={scrollContainerRef} className="relative flex-1 overflow-y-auto">
@@ -1180,7 +928,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
           <TitleEditor
             key={`title-${id}`}
             defaultValue={issue.title}
-            placeholder="事项标题"
+            placeholder={t(($) => $.detail.title_placeholder)}
             className="w-full text-2xl font-bold leading-snug tracking-tight"
             onBlur={(value) => {
               const trimmed = value.trim();
@@ -1193,7 +941,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
               href={paths.issueDetail(parentIssue.id)}
               className="mt-2 inline-flex max-w-full items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors group/parent"
             >
-              <span className="font-medium shrink-0">Sub-issue of</span>
+              <span className="font-medium shrink-0">{t(($) => $.detail.sub_issue_of)}</span>
               <StatusIcon status={parentIssue.status} className="h-3.5 w-3.5 shrink-0" />
               <span className="tabular-nums shrink-0">{parentIssue.identifier}</span>
               <span className="truncate group-hover/parent:text-foreground">
@@ -1218,10 +966,11 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
               ref={descEditorRef}
               key={id}
               defaultValue={issue.description || ""}
-              placeholder="Add description..."
+              placeholder={t(($) => $.detail.desc_placeholder)}
               onUpdate={(md) => handleUpdateField({ description: md })}
               onUploadFile={handleDescriptionUpload}
               debounceMs={1500}
+              currentIssueId={id}
             />
 
             <div className="flex items-center gap-1 mt-3">
@@ -1245,22 +994,17 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
               <button
                 type="button"
                 className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                onClick={() =>
-                  useModalStore.getState().open("create-issue", {
-                    parent_issue_id: issue.id,
-                    parent_issue_identifier: issue.identifier,
-                  })
-                }
+                onClick={() => actions.openCreateSubIssue()}
               >
                 <Plus className="h-3.5 w-3.5" />
-                <span>添加子事项</span>
+                <span>{t(($) => $.detail.add_sub_issues)}</span>
               </button>
             </div>
           )}
           {childIssues.length > 0 && (() => {
             const doneCount = childIssues.filter((c) => c.status === "done").length;
             return (
-              <div className="mt-10">
+              <div className="mt-10 group/sub-issues">
                 {/* Header */}
                 <div className="flex items-center gap-2 mb-2">
                   <button
@@ -1274,7 +1018,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                         subIssuesCollapsed && "-rotate-90",
                       )}
                     />
-                    <span>Sub-issues</span>
+                    <span>{t(($) => $.detail.sub_issues_label)}</span>
                   </button>
                   <div className="inline-flex items-center gap-1.5 rounded-full bg-muted/60 px-2 py-0.5">
                     <ProgressRing done={doneCount} total={childIssues.length} size={11} />
@@ -1282,73 +1026,48 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                       {doneCount}/{childIssues.length}
                     </span>
                   </div>
+                  <input
+                    type="checkbox"
+                    checked={allChildrenSelected}
+                    ref={(el) => {
+                      if (el) el.indeterminate = someChildrenSelected && !allChildrenSelected;
+                    }}
+                    onChange={handleToggleSelectAllChildren}
+                    aria-label="Select all sub-issues"
+                    className={cn(
+                      "ml-1 cursor-pointer accent-primary transition-opacity",
+                      someChildrenSelected
+                        ? "opacity-100"
+                        : "opacity-0 group-hover/sub-issues:opacity-100 focus-visible:opacity-100",
+                    )}
+                  />
                   <Tooltip>
                     <TooltipTrigger
                       render={
                         <button
                           type="button"
                           className="ml-auto inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                          onClick={() =>
-                            useModalStore.getState().open("create-issue", {
-                              parent_issue_id: issue.id,
-                              parent_issue_identifier: issue.identifier,
-                            })
-                          }
-                          aria-label="添加子事项"
+                          onClick={() => actions.openCreateSubIssue()}
+                          aria-label={t(($) => $.detail.add_sub_issue_aria)}
                         >
                           <Plus className="h-4 w-4" />
                         </button>
                       }
                     />
-                    <TooltipContent side="bottom">添加子事项</TooltipContent>
+                    <TooltipContent side="bottom">{t(($) => $.detail.add_sub_issue_tooltip)}</TooltipContent>
                   </Tooltip>
                 </div>
+
+                {/* Inline batch toolbar — appears next to the rows when
+                    selections exist, instead of as a far-away fixed bar. */}
+                <BatchActionToolbar placement="inline" />
 
                 {/* List */}
                 {!subIssuesCollapsed && (
                   <div className="overflow-hidden rounded-lg border bg-card/30 divide-y divide-border/60">
-                    {childIssues.map((child) => {
-                      const isDone =
-                        child.status === "done" || child.status === "cancelled";
-                      return (
-                        <AppLink
-                          key={child.id}
-                          href={paths.issueDetail(child.id)}
-                          className="flex items-center gap-2.5 px-3 py-2 hover:bg-accent/50 transition-colors group/row"
-                        >
-                          <StatusIcon
-                            status={child.status}
-                            className="h-[15px] w-[15px] shrink-0"
-                          />
-                          <span className="text-[11px] text-muted-foreground tabular-nums font-medium shrink-0">
-                            {child.identifier}
-                          </span>
-                          <span
-                            className={cn(
-                              "text-sm truncate flex-1",
-                              isDone
-                                ? "text-muted-foreground"
-                                : "group-hover/row:text-foreground",
-                            )}
-                          >
-                            {child.title}
-                          </span>
-                          {child.assignee_type && child.assignee_id ? (
-                            <ActorAvatar
-                              actorType={child.assignee_type}
-                              actorId={child.assignee_id}
-                              size={20}
-                              className="shrink-0"
-                            />
-                          ) : (
-                            <span
-                              aria-hidden
-                              className="h-5 w-5 rounded-full border border-dashed border-muted-foreground/30 shrink-0"
-                            />
-                          )}
-                        </AppLink>
-                      );
-                    })}
+                    {childIssues.map((child) => (
+                      <SubIssueRow key={child.id} child={child} />
+                    ))}
                   </div>
                 )}
               </div>
@@ -1361,14 +1080,14 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
           <div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <h2 className="text-base font-semibold">动态</h2>
+                <h2 className="text-base font-semibold">{t(($) => $.detail.activity_section)}</h2>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleToggleSubscribe}
                   className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  {isSubscribed ? "取消订阅" : "订阅"}
+                  {isSubscribed ? t(($) => $.detail.unsubscribe) : t(($) => $.detail.subscribe)}
                 </button>
                 <Popover>
                   <PopoverTrigger className="cursor-pointer hover:opacity-80 transition-opacity">
@@ -1380,6 +1099,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                             actorType={sub.user_type}
                             actorId={sub.user_id}
                             size={24}
+                            enableHoverCard
                           />
                         ))}
                         {subscribers.length > 4 && (
@@ -1394,11 +1114,11 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                   </PopoverTrigger>
                   <PopoverContent align="end" className="w-64 p-0">
                     <Command>
-                      <CommandInput placeholder="修改订阅者..." />
+                      <CommandInput placeholder={t(($) => $.detail.change_subscribers_placeholder)} />
                       <CommandList className="max-h-64">
-                        <CommandEmpty>未找到结果</CommandEmpty>
+                        <CommandEmpty>{t(($) => $.detail.no_subscribers_results)}</CommandEmpty>
                         {members.length > 0 && (
-                          <CommandGroup heading="成员">
+                          <CommandGroup heading={t(($) => $.detail.members_group)}>
                             {members.filter((m, i, arr) => arr.findIndex((x) => x.user_id === m.user_id) === i).map((m) => {
                               const sub = subscribers.find((s) => s.user_type === "member" && s.user_id === m.user_id);
                               const isSubbed = !!sub;
@@ -1418,7 +1138,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                           </CommandGroup>
                         )}
                         {agents.filter((a) => !a.archived_at).length > 0 && (
-                          <CommandGroup heading="代理">
+                          <CommandGroup heading={t(($) => $.detail.agents_group)}>
                             {agents.filter((a) => !a.archived_at).map((a) => {
                               const sub = subscribers.find((s) => s.user_type === "agent" && s.user_id === a.id);
                               const isSubbed = !!sub;
@@ -1429,7 +1149,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
                                   className="flex items-center gap-2.5"
                                 >
                                   <Checkbox checked={isSubbed} className="pointer-events-none" />
-                                  <ActorAvatar actorType="agent" actorId={a.id} size={22} />
+                                  <ActorAvatar actorType="agent" actorId={a.id} size={22} showStatusDot />
                                   <span className="truncate flex-1">{a.name}</span>
 
                                 </CommandItem>
@@ -1444,162 +1164,145 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
               </div>
             </div>
 
-            {/* Agent live output — sticky inside the Activity section so it
-                stays pinned while scrolling through TaskRunHistory + comments. */}
-            <AgentLiveCard issueId={id} />
-
-            {/* Agent execution history */}
-            <div className="mt-3">
-              <TaskRunHistory issueId={id} />
-            </div>
+            {/* Agent live output — sticky banner in the activity section,
+                keyed by issue id so switching issues remounts the card and
+                clears any in-flight task state from the previous issue.
+                The execution log itself (per-task timeline + past runs)
+                lives in the right panel via ExecutionLogSection — this
+                card is just a header-style "agent is working" anchor. */}
+            <AgentLiveCard key={id} issueId={id} />
 
             {/* Timeline entries */}
+            {timelineLoading && timelineView.groups.length === 0 ? (
+              <TimelineSkeleton />
+            ) : (
+            <>
             <div className="mt-4 flex flex-col gap-3">
-              {(() => {
-                const topLevel = timeline.filter((e) => e.type === "activity" || !e.parent_id);
-                const repliesByParent = new Map<string, TimelineEntry[]>();
-                for (const e of timeline) {
-                  if (e.type === "comment" && e.parent_id) {
-                    const list = repliesByParent.get(e.parent_id) ?? [];
-                    list.push(e);
-                    repliesByParent.set(e.parent_id, list);
-                  }
-                }
-
-                // Coalesce: same actor + same action within 2 min → keep last only
-                const COALESCE_MS = 2 * 60 * 1000;
-                const coalesced: TimelineEntry[] = [];
-                for (const entry of topLevel) {
-                  if (entry.type === "activity") {
-                    const prev = coalesced[coalesced.length - 1];
-                    if (
-                      prev?.type === "activity" &&
-                      prev.action === entry.action &&
-                      prev.actor_type === entry.actor_type &&
-                      prev.actor_id === entry.actor_id &&
-                      Math.abs(new Date(entry.created_at).getTime() - new Date(prev.created_at).getTime()) <= COALESCE_MS
-                    ) {
-                      // Replace previous with this one (keep the later result)
-                      coalesced[coalesced.length - 1] = entry;
-                      continue;
-                    }
-                  }
-                  coalesced.push(entry);
-                }
-
-                // Group consecutive activities together so the connector line works
-                const groups: { type: "activities" | "comment"; entries: TimelineEntry[] }[] = [];
-                for (const entry of coalesced) {
-                  if (entry.type === "activity") {
-                    const last = groups[groups.length - 1];
-                    if (last?.type === "activities") {
-                      last.entries.push(entry);
-                    } else {
-                      groups.push({ type: "activities", entries: [entry] });
-                    }
-                  } else {
-                    groups.push({ type: "comment", entries: [entry] });
-                  }
-                }
-
-                return groups.map((group) => {
-                  if (group.type === "comment") {
-                    const entry = group.entries[0]!;
+              {timelineView.groups.map((group) => {
+                if (group.type === "comment") {
+                  const entry = group.entries[0]!;
+                  const isResolved = !!entry.resolved_at;
+                  const isExpanded = expandedResolved.has(entry.id);
+                  if (isResolved && !isExpanded) {
                     return (
                       <div key={entry.id} id={`comment-${entry.id}`}>
-                        <CommentCard
-                          issueId={id}
+                        <ResolvedThreadBar
                           entry={entry}
-                          allReplies={repliesByParent}
-                          currentUserId={user?.id}
-                          onReply={submitReply}
-                          onEdit={editComment}
-                          onDelete={deleteComment}
-                          onToggleReaction={handleToggleReaction}
-                          highlightedCommentId={highlightedId}
+                          replies={timelineView.threadReplies.get(entry.id) ?? EMPTY_REPLIES}
+                          onExpand={() => toggleResolvedExpand(entry.id, true)}
                         />
                       </div>
                     );
                   }
-
                   return (
-                    <div key={group.entries[0]!.id} className="px-4 flex flex-col gap-3">
-                      {group.entries.map((entry, _idx) => {
-                        const details = (entry.details ?? {}) as Record<string, string>;
-                        const isStatusChange = entry.action === "status_changed";
-                        const isPriorityChange = entry.action === "priority_changed";
-                        const isDueDateChange = entry.action === "due_date_changed";
-
-                        let leadIcon: React.ReactNode;
-                        if (isStatusChange && details.to) {
-                          leadIcon = <StatusIcon status={details.to as IssueStatus} className="h-4 w-4 shrink-0" />;
-                        } else if (isPriorityChange && details.to) {
-                          leadIcon = <PriorityIcon priority={details.to as IssuePriority} className="h-4 w-4 shrink-0" />;
-                        } else if (isDueDateChange) {
-                          leadIcon = <Calendar className="h-4 w-4 shrink-0 text-muted-foreground" />;
-                        } else {
-                          leadIcon = <ActorAvatar actorType={entry.actor_type} actorId={entry.actor_id} size={16} />;
-                        }
-
-                        return (
-                          <div key={entry.id} className="flex items-center text-xs text-muted-foreground">
-                            <div className="mr-2 flex w-4 shrink-0 justify-center">
-                              {leadIcon}
-                            </div>
-                            <div className="flex min-w-0 flex-1 items-center gap-1">
-                              <span className="shrink-0 font-medium">{getActorName(entry.actor_type, entry.actor_id)}</span>
-                              <span className="truncate">{formatActivity(entry, getActorName)}</span>
-                              <Tooltip>
-                                <TooltipTrigger
-                                  render={
-                                    <span className="ml-auto shrink-0 cursor-default">
-                                      {timeAgo(entry.created_at)}
-                                    </span>
-                                  }
-                                />
-                                <TooltipContent side="top">
-                                  {new Date(entry.created_at).toLocaleString()}
-                                </TooltipContent>
-                              </Tooltip>
-                            </div>
-                          </div>
-                        );
-                      })}
+                    <div key={entry.id} id={`comment-${entry.id}`}>
+                      <CommentCard
+                        issueId={id}
+                        entry={entry}
+                        replies={timelineView.threadReplies.get(entry.id) ?? EMPTY_REPLIES}
+                        currentUserId={user?.id}
+                        canModerate={canModerateComments}
+                        onReply={submitReply}
+                        onEdit={editComment}
+                        onDelete={deleteComment}
+                        onToggleReaction={handleToggleReaction}
+                        onResolveToggle={handleResolveToggle}
+                        onCollapseResolved={isResolved ? () => toggleResolvedExpand(entry.id, false) : undefined}
+                        highlightedCommentId={highlightedId}
+                      />
                     </div>
                   );
-                });
-              })()}
+                }
+
+                return (
+                  <div key={group.entries[0]!.id} className="px-4 flex flex-col gap-3">
+                    {group.entries.map((entry, _idx) => {
+                      const details = (entry.details ?? {}) as Record<string, string>;
+                      const isStatusChange = entry.action === "status_changed";
+                      const isPriorityChange = entry.action === "priority_changed";
+                      const isDueDateChange = entry.action === "due_date_changed";
+
+                      let leadIcon: React.ReactNode;
+                      if (isStatusChange && details.to) {
+                        leadIcon = <StatusIcon status={details.to as IssueStatus} className="h-4 w-4 shrink-0" />;
+                      } else if (isPriorityChange && details.to) {
+                        leadIcon = <PriorityIcon priority={details.to as IssuePriority} className="h-4 w-4 shrink-0" />;
+                      } else if (isDueDateChange) {
+                        leadIcon = <Calendar className="h-4 w-4 shrink-0 text-muted-foreground" />;
+                      } else {
+                        leadIcon = <ActorAvatar actorType={entry.actor_type} actorId={entry.actor_id} size={16} />;
+                      }
+
+                      return (
+                        <div key={entry.id} className="flex items-center text-xs text-muted-foreground">
+                          <div className="mr-2 flex w-4 shrink-0 justify-center">
+                            {leadIcon}
+                          </div>
+                          <div className="flex min-w-0 flex-1 items-center gap-1">
+                            <span className="shrink-0 font-medium">{getActorName(entry.actor_type, entry.actor_id)}</span>
+                            <span className="truncate">{formatActivity(entry, t, getActorName)}</span>
+                            {/* Coalesce badge for non-task actions: task_completed / task_failed already
+                                bake the count into their translation, so suppress the badge there to
+                                avoid showing "×N" twice. */}
+                            {(entry.coalesced_count ?? 1) > 1 &&
+                              entry.action !== "task_completed" &&
+                              entry.action !== "task_failed" && (
+                                <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs font-medium tabular-nums text-muted-foreground">
+                                  {t(($) => $.activity.coalesced_badge, { count: entry.coalesced_count ?? 1 })}
+                                </span>
+                              )}
+                            <Tooltip>
+                              <TooltipTrigger
+                                render={
+                                  <span className="ml-auto shrink-0 cursor-default">
+                                    {timeAgo(entry.created_at)}
+                                  </span>
+                                }
+                              />
+                              <TooltipContent side="top">
+                                {new Date(entry.created_at).toLocaleString()}
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
             </div>
+            </>
+            )}
 
             {/* Bottom comment input — no avatar, full width */}
             <div className="mt-4">
-              {issue && (
-                <div className="mb-2 flex items-center justify-between gap-2 rounded-lg border bg-card/50 px-3 py-2">
-                  <div>
-                    <div className="text-xs font-medium">POC：讨论式写代码</div>
-                    <p className="text-[11px] text-muted-foreground">
-                      用现有评论线程和 @agent 接力，先讨论方案，再决定是否执行代码。
-                    </p>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={discussionAgents.length === 0}
-                    onClick={() => setDiscussionDialogOpen(true)}
-                  >
-                    发起代码讨论
-                  </Button>
-                </div>
-              )}
               <CommentInput issueId={id} onSubmit={submitComment} />
             </div>
           </div>
         </div>
         </div>
       </div>
+  );
+
+  if (isMobile) {
+    return (
+      <div className="flex flex-1 min-h-0">
+        {detailContent}
+        <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
+          <SheetContent side="right" showCloseButton={false} className="w-[320px] overflow-y-auto p-4">
+            {sidebarContent}
+          </SheetContent>
+        </Sheet>
+      </div>
+    );
+  }
+
+  return (
+    <ResizablePanelGroup orientation="horizontal" className="flex-1 min-h-0" defaultLayout={defaultLayout} onLayoutChanged={onLayoutChanged}>
+      <ResizablePanel id="content" minSize="50%">
+        {detailContent}
       </ResizablePanel>
-      {!isMobile && <ResizableHandle />}
-      {!isMobile && (
+      <ResizableHandle />
       <ResizablePanel
         id="sidebar"
         defaultSize={defaultSidebarOpen ? 320 : 0}
@@ -1608,7 +1311,7 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
         collapsible
         groupResizeBehavior="preserve-pixel-size"
         panelRef={sidebarRef}
-        onResize={(size) => setSidebarOpen(size.inPixels > 0)}
+        onResize={(size) => setDesktopSidebarOpen(size.inPixels > 0)}
       >
       <div className="overflow-y-auto border-l h-full">
         <div className="p-4">
@@ -1616,23 +1319,6 @@ export function IssueDetail({ issueId, onDelete, defaultSidebarOpen = true, layo
         </div>
       </div>
       </ResizablePanel>
-      )}
-      {isMobile && (
-        <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-          <SheetContent side="right" showCloseButton={false} className="w-[320px] overflow-y-auto p-4">
-            {sidebarContent}
-          </SheetContent>
-        </Sheet>
-      )}
-      {issue && (
-        <DiscussionKickoffDialog
-          open={discussionDialogOpen}
-          onOpenChange={setDiscussionDialogOpen}
-          issue={issue}
-          agents={discussionAgents}
-          onSubmit={(content) => submitComment(content)}
-        />
-      )}
     </ResizablePanelGroup>
   );
 }

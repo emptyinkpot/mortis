@@ -20,6 +20,7 @@ export interface CardProperties {
   dueDate: boolean;
   project: boolean;
   childProgress: boolean;
+  labels: boolean;
 }
 
 export interface ActorFilterValue {
@@ -28,20 +29,21 @@ export interface ActorFilterValue {
 }
 
 export const SORT_OPTIONS: { value: SortField; label: string }[] = [
-  { value: "position", label: "手动排序" },
-  { value: "priority", label: "优先级" },
-  { value: "due_date", label: "截止日期" },
-  { value: "created_at", label: "创建时间" },
-  { value: "title", label: "标题" },
+  { value: "position", label: "Manual" },
+  { value: "priority", label: "Priority" },
+  { value: "due_date", label: "Due date" },
+  { value: "created_at", label: "Created date" },
+  { value: "title", label: "Title" },
 ];
 
 export const CARD_PROPERTY_OPTIONS: { key: keyof CardProperties; label: string }[] = [
-  { key: "priority", label: "优先级" },
-  { key: "description", label: "描述" },
-  { key: "assignee", label: "负责人" },
-  { key: "dueDate", label: "截止日期" },
-  { key: "project", label: "项目" },
-  { key: "childProgress", label: "子事项进度" },
+  { key: "priority", label: "Priority" },
+  { key: "description", label: "Description" },
+  { key: "assignee", label: "Assignee" },
+  { key: "dueDate", label: "Due date" },
+  { key: "project", label: "Project" },
+  { key: "labels", label: "Labels" },
+  { key: "childProgress", label: "Sub-issue progress" },
 ];
 
 export interface IssueViewState {
@@ -53,6 +55,7 @@ export interface IssueViewState {
   creatorFilters: ActorFilterValue[];
   projectFilters: string[];
   includeNoProject: boolean;
+  labelFilters: string[];
   sortBy: SortField;
   sortDirection: SortDirection;
   cardProperties: CardProperties;
@@ -65,6 +68,7 @@ export interface IssueViewState {
   toggleCreatorFilter: (value: ActorFilterValue) => void;
   toggleProjectFilter: (projectId: string) => void;
   toggleNoProject: () => void;
+  toggleLabelFilter: (labelId: string) => void;
   hideStatus: (status: IssueStatus) => void;
   showStatus: (status: IssueStatus) => void;
   clearFilters: () => void;
@@ -83,6 +87,7 @@ export const viewStoreSlice = (set: StoreApi<IssueViewState>["setState"]): Issue
   creatorFilters: [],
   projectFilters: [],
   includeNoProject: false,
+  labelFilters: [],
   sortBy: "position",
   sortDirection: "asc",
   cardProperties: {
@@ -92,6 +97,7 @@ export const viewStoreSlice = (set: StoreApi<IssueViewState>["setState"]): Issue
     dueDate: true,
     project: true,
     childProgress: true,
+    labels: true,
   },
   listCollapsedStatuses: [],
 
@@ -144,6 +150,12 @@ export const viewStoreSlice = (set: StoreApi<IssueViewState>["setState"]): Issue
     })),
   toggleNoProject: () =>
     set((state) => ({ includeNoProject: !state.includeNoProject })),
+  toggleLabelFilter: (labelId) =>
+    set((state) => ({
+      labelFilters: state.labelFilters.includes(labelId)
+        ? state.labelFilters.filter((id) => id !== labelId)
+        : [...state.labelFilters, labelId],
+    })),
   hideStatus: (status) =>
     set((state) => {
       // If no filter active, activate filter with all EXCEPT this one
@@ -169,6 +181,7 @@ export const viewStoreSlice = (set: StoreApi<IssueViewState>["setState"]): Issue
       creatorFilters: [],
       projectFilters: [],
       includeNoProject: false,
+      labelFilters: [],
     }),
   setSortBy: (field) => set({ sortBy: field }),
   setSortDirection: (dir) => set({ sortDirection: dir }),
@@ -199,12 +212,39 @@ export const viewStorePersistOptions = (name: string) => ({
     creatorFilters: state.creatorFilters,
     projectFilters: state.projectFilters,
     includeNoProject: state.includeNoProject,
+    labelFilters: state.labelFilters,
     sortBy: state.sortBy,
     sortDirection: state.sortDirection,
     cardProperties: state.cardProperties,
     listCollapsedStatuses: state.listCollapsedStatuses,
   }),
+  // Default Zustand merge is shallow, so a persisted `cardProperties` snapshot
+  // saved before a new toggle was introduced wins entirely and the new key is
+  // missing — the dropdown switch then reads `undefined` and renders unchecked
+  // even though defaults treat it as on. Deep-merge `cardProperties` so newly
+  // added toggles inherit their default value for existing users.
+  merge: mergeViewStatePersisted,
 });
+
+/**
+ * Reusable persist `merge` for view-state stores. Generic over T so the same
+ * deep-merge for `cardProperties` works for both the issues view store and
+ * the my-issues view store (which extends IssueViewState).
+ */
+export function mergeViewStatePersisted<T extends IssueViewState>(
+  persisted: unknown,
+  current: T,
+): T {
+  const p = (persisted ?? {}) as Partial<T>;
+  return {
+    ...current,
+    ...p,
+    cardProperties: {
+      ...current.cardProperties,
+      ...(p.cardProperties ?? {}),
+    },
+  };
+}
 
 /** Factory: creates a vanilla StoreApi for use with React Context. */
 export function createIssueViewStore(persistKey: string): StoreApi<IssueViewState> {

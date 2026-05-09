@@ -2,12 +2,13 @@ import type { Metadata } from "next";
 import { MulticaLanding } from "@/features/landing/components/multica-landing";
 
 export const metadata: Metadata = {
-  title: "首页",
+  title: "Homepage",
   description:
-    "Mortis 是一个面向单一操作者与其 Agent 的私人指挥工作区。",
+    "Multica — open-source platform that turns coding agents into real teammates. Assign tasks, track progress, compound skills.",
   openGraph: {
-    title: "Mortis —— 私人指挥工作区",
-    description: "面向单一操作者与其 Agent 的私人指挥工作区。",
+    title: "Multica — Project Management for Human + Agent Teams",
+    description:
+      "Manage your human + agent workforce in one place.",
     url: "/homepage",
   },
   alternates: {

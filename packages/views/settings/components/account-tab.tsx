@@ -10,8 +10,10 @@ import { toast } from "sonner";
 import { useAuthStore } from "@multica/core/auth";
 import { api } from "@multica/core/api";
 import { useFileUpload } from "@multica/core/hooks/use-file-upload";
+import { useT } from "../../i18n";
 
 export function AccountTab() {
+  const { t } = useT("settings");
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
 
@@ -41,9 +43,9 @@ export function AccountTab() {
       if (!result) return;
       const updated = await api.updateMe({ avatar_url: result.link });
       setUser(updated);
-      toast.success("头像已更新");
+      toast.success(t(($) => $.account.toast_avatar_updated));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "上传头像失败");
+      toast.error(err instanceof Error ? err.message : t(($) => $.account.toast_avatar_failed));
     }
   };
 
@@ -52,9 +54,9 @@ export function AccountTab() {
     try {
       const updated = await api.updateMe({ name: profileName });
       setUser(updated);
-      toast.success("个人资料已更新");
+      toast.success(t(($) => $.account.toast_profile_updated));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "更新个人资料失败");
+      toast.error(e instanceof Error ? e.message : t(($) => $.account.toast_profile_failed));
     } finally {
       setProfileSaving(false);
     }
@@ -63,7 +65,7 @@ export function AccountTab() {
   return (
     <div className="space-y-8">
       <section className="space-y-4">
-        <h2 className="text-sm font-semibold">个人资料</h2>
+        <h2 className="text-sm font-semibold">{t(($) => $.account.section_profile)}</h2>
 
         <Card>
           <CardContent className="space-y-4">
@@ -102,12 +104,12 @@ export function AccountTab() {
                 onChange={handleAvatarUpload}
               />
               <div className="text-xs text-muted-foreground">
-                点击上传头像
+                {t(($) => $.account.click_avatar_hint)}
               </div>
             </div>
 
             <div>
-              <Label className="text-xs text-muted-foreground">名称</Label>
+              <Label className="text-xs text-muted-foreground">{t(($) => $.account.name_label)}</Label>
               <Input
                 type="search"
                 value={profileName}
@@ -122,7 +124,7 @@ export function AccountTab() {
                 disabled={profileSaving || !profileName.trim()}
               >
                 <Save className="h-3 w-3" />
-                {profileSaving ? "更新中..." : "更新资料"}
+                {profileSaving ? t(($) => $.account.saving) : t(($) => $.account.save)}
               </Button>
             </div>
           </CardContent>

@@ -18,8 +18,21 @@ import type { UpdateIssueRequest } from "@multica/core/types";
 import { useIssueSelectionStore } from "@multica/core/issues/stores/selection-store";
 import { useBatchUpdateIssues, useBatchDeleteIssues } from "@multica/core/issues/mutations";
 import { StatusPicker, PriorityPicker, AssigneePicker } from "./pickers";
+import { useT } from "../../i18n";
+import { cn } from "@multica/ui/lib/utils";
 
-export function BatchActionToolbar() {
+export function BatchActionToolbar({
+  placement = "fixed-bottom",
+}: {
+  /**
+   * "fixed-bottom" — floats at the bottom of the viewport (default; used by
+   * full-screen issue lists).
+   * "inline" — renders in normal flow so callers can place it adjacent to
+   * the selected rows (used inside scrollable sections like sub-issues).
+   */
+  placement?: "fixed-bottom" | "inline";
+}) {
+  const { t } = useT("issues");
   const selectedIds = useIssueSelectionStore((s) => s.selectedIds);
   const clear = useIssueSelectionStore((s) => s.clear);
   const count = selectedIds.size;
@@ -39,9 +52,9 @@ export function BatchActionToolbar() {
   const handleBatchUpdate = async (updates: Partial<UpdateIssueRequest>) => {
     try {
       await batchUpdate.mutateAsync({ ids, updates });
-      toast.success(`已更新 ${count} 个事项`);
+      toast.success(t(($) => $.batch.update_success, { count }));
     } catch {
-      toast.error("更新事项失败");
+      toast.error(t(($) => $.batch.update_failed));
     }
   };
 
@@ -49,9 +62,9 @@ export function BatchActionToolbar() {
     try {
       await batchDelete.mutateAsync(ids);
       clear();
-      toast.success(`已删除 ${count} 个事项`);
+      toast.success(t(($) => $.batch.delete_success, { count }));
     } catch {
-      toast.error("删除事项失败");
+      toast.error(t(($) => $.batch.delete_failed));
     } finally {
       setDeleteOpen(false);
     }
@@ -59,9 +72,16 @@ export function BatchActionToolbar() {
 
   return (
     <>
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1 rounded-lg border bg-background px-2 py-1.5 shadow-lg">
+      <div
+        className={cn(
+          "z-50 flex items-center gap-1 rounded-lg border bg-background px-2 py-1.5 shadow-lg",
+          placement === "fixed-bottom"
+            ? "fixed bottom-6 left-1/2 -translate-x-1/2"
+            : "mb-2 w-fit",
+        )}
+      >
         <div className="flex items-center gap-1.5 pl-1 pr-2 border-r mr-1">
-          <span className="text-sm font-medium">已选中 {count} 项</span>
+          <span className="text-sm font-medium">{t(($) => $.batch.selected, { count })}</span>
           <button
             type="button"
             onClick={clear}
@@ -78,7 +98,7 @@ export function BatchActionToolbar() {
           open={statusOpen}
           onOpenChange={setStatusOpen}
           triggerRender={<Button variant="ghost" size="sm" disabled={loading} />}
-          trigger="状态"
+          trigger={t(($) => $.batch.status)}
           align="center"
         />
 
@@ -89,7 +109,7 @@ export function BatchActionToolbar() {
           open={priorityOpen}
           onOpenChange={setPriorityOpen}
           triggerRender={<Button variant="ghost" size="sm" disabled={loading} />}
-          trigger="优先级"
+          trigger={t(($) => $.batch.priority)}
           align="center"
         />
 
@@ -101,7 +121,7 @@ export function BatchActionToolbar() {
           open={assigneeOpen}
           onOpenChange={setAssigneeOpen}
           triggerRender={<Button variant="ghost" size="sm" disabled={loading} />}
-          trigger="负责人"
+          trigger={t(($) => $.batch.assignee)}
           align="center"
         />
 
@@ -114,7 +134,7 @@ export function BatchActionToolbar() {
           className="text-destructive hover:text-destructive"
         >
           <Trash2 className="size-3.5 mr-1" />
-          删除
+          {t(($) => $.batch.delete)}
         </Button>
       </div>
 
@@ -122,19 +142,22 @@ export function BatchActionToolbar() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              删除这 {count} 个事项？
+              {t(($) => $.batch.delete_dialog_title, { count })}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              此操作不可撤销。选中的事项及其相关数据将被永久删除。
+              {t(($) => $.batch.delete_dialog_desc, { count })}
+              <span className="mt-2 block text-xs text-muted-foreground/80">
+                {t(($) => $.batch.delete_dialog_warning)}
+              </span>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogCancel>{t(($) => $.batch.cancel)}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleBatchDelete}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              删除
+              {t(($) => $.batch.delete)}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

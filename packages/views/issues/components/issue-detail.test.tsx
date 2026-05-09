@@ -3,6 +3,18 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Issue, TimelineEntry } from "@multica/core/types";
+import { I18nProvider } from "@multica/core/i18n/react";
+import enCommon from "../../locales/en/common.json";
+import enIssues from "../../locales/en/issues.json";
+
+const TEST_RESOURCES = { en: { common: enCommon, issues: enIssues } };
+
+const mockViewport = vi.hoisted(() => ({ isMobile: false }));
+
+vi.mock("@multica/ui/hooks/use-mobile", () => ({
+  useIsMobile: () => mockViewport.isMobile,
+}));
+
 // useWorkspaceId() derives from useCurrentWorkspace (relative import inside
 // @multica/core/hooks.tsx). vi.mock("@multica/core/paths") only intercepts
 // the bare-specifier, not the internal relative import. Mock the hooks module
@@ -85,7 +97,11 @@ vi.mock("../../navigation", () => ({
       {children}
     </a>
   ),
-  useNavigation: () => ({ push: vi.fn(), pathname: "/issues/issue-1", getShareableUrl: undefined }),
+  useNavigation: () => ({
+    push: vi.fn(),
+    pathname: "/issues/issue-1",
+    getShareableUrl: (p: string) => `https://app.multica.com${p}`,
+  }),
   NavigationProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
@@ -176,16 +192,8 @@ const mockApiObj = vi.hoisted(() => ({
   getActiveTasksForIssue: vi.fn().mockResolvedValue({ tasks: [] }),
   listTasksByIssue: vi.fn().mockResolvedValue([]),
   listTaskMessages: vi.fn().mockResolvedValue([]),
-  getIssueUsage: vi.fn().mockResolvedValue({
-    total_input_tokens: 0,
-    total_output_tokens: 0,
-    total_cache_read_tokens: 0,
-    total_cache_write_tokens: 0,
-    task_count: 0,
-  }),
   listChildIssues: vi.fn().mockResolvedValue({ issues: [] }),
   listIssues: vi.fn().mockResolvedValue({ issues: [], total: 0 }),
-  listRuntimes: vi.fn().mockResolvedValue([]),
   uploadFile: vi.fn(),
   listIssueReactions: vi.fn().mockResolvedValue([]),
   addIssueReaction: vi.fn(),
@@ -359,9 +367,11 @@ function createTestQueryClient() {
 function renderIssueDetail(issueId = "issue-1") {
   const queryClient = createTestQueryClient();
   return render(
-    <QueryClientProvider client={queryClient}>
-      <IssueDetail issueId={issueId} />
-    </QueryClientProvider>,
+    <I18nProvider locale="en" resources={TEST_RESOURCES}>
+      <QueryClientProvider client={queryClient}>
+        <IssueDetail issueId={issueId} />
+      </QueryClientProvider>
+    </I18nProvider>,
   );
 }
 
@@ -372,8 +382,10 @@ function renderIssueDetail(issueId = "issue-1") {
 describe("IssueDetail (shared)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockViewport.isMobile = false;
     // Default: issue loads successfully
     mockApiObj.getIssue.mockResolvedValue(mockIssue);
+    // /timeline returns the entries flat in chronological order (oldest first).
     mockApiObj.listTimeline.mockResolvedValue(mockTimeline);
     mockApiObj.listIssueReactions.mockResolvedValue([]);
     mockApiObj.listIssueSubscribers.mockResolvedValue([]);
@@ -381,14 +393,6 @@ describe("IssueDetail (shared)", () => {
     mockApiObj.listIssues.mockResolvedValue({ issues: [], total: 0 });
     mockApiObj.getActiveTasksForIssue.mockResolvedValue({ tasks: [] });
     mockApiObj.listTasksByIssue.mockResolvedValue([]);
-    mockApiObj.getIssueUsage.mockResolvedValue({
-      total_input_tokens: 0,
-      total_output_tokens: 0,
-      total_cache_read_tokens: 0,
-      total_cache_write_tokens: 0,
-      task_count: 0,
-    });
-    mockApiObj.listRuntimes.mockResolvedValue([]);
     mockApiObj.listMembers.mockResolvedValue([
       { user_id: "user-1", name: "Test User", email: "test@test.com", role: "admin" },
     ]);
@@ -413,14 +417,6 @@ describe("IssueDetail (shared)", () => {
     });
 
     expect(screen.getByDisplayValue("Add JWT auth to the backend")).toBeInTheDocument();
-  });
-
-  it("renders issue identifier in the breadcrumb", async () => {
-    renderIssueDetail();
-
-    await waitFor(() => {
-      expect(screen.getByText("TES-1")).toBeInTheDocument();
-    });
   });
 
   it("renders workspace name as breadcrumb link", async () => {
@@ -449,6 +445,19 @@ describe("IssueDetail (shared)", () => {
     expect(screen.getByText("Due date")).toBeInTheDocument();
   });
 
+  it("uses a non-resizable layout with the sidebar sheet closed by default on mobile", async () => {
+    mockViewport.isMobile = true;
+
+    renderIssueDetail();
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("Implement authentication")).toBeInTheDocument();
+    });
+
+    expect(screen.queryByTestId("panel-group")).not.toBeInTheDocument();
+    expect(screen.queryByText("Properties")).not.toBeInTheDocument();
+  });
+
   it("renders Details section with Created by and dates", async () => {
     renderIssueDetail();
 
@@ -459,56 +468,6 @@ describe("IssueDetail (shared)", () => {
     expect(screen.getByText("Created by")).toBeInTheDocument();
     expect(screen.getByText("Created")).toBeInTheDocument();
     expect(screen.getByText("Updated")).toBeInTheDocument();
-  });
-
-  it("renders a lightweight runtime summary block when issue runs exist", async () => {
-    mockApiObj.listTasksByIssue.mockResolvedValue([
-      {
-        id: "task-1",
-        agent_id: "agent-1",
-        runtime_id: "runtime-12345678",
-        issue_id: "issue-1",
-        status: "running",
-        priority: 1,
-        dispatched_at: "2026-01-20T09:59:00Z",
-        started_at: "2026-01-20T10:00:00Z",
-        completed_at: null,
-        result: null,
-        error: null,
-        created_at: "2026-01-20T09:58:00Z",
-      },
-    ]);
-    mockApiObj.listRuntimes.mockResolvedValue([
-      {
-        id: "runtime-12345678",
-        workspace_id: "ws-1",
-        daemon_id: "daemon-1",
-        name: "Mortis Runtime (studio-host)",
-        runtime_mode: "cloud",
-        provider: "claude",
-        launch_header: "main",
-        status: "online",
-        device_info: "Ubuntu 24.04",
-        metadata: { cli_version: "1.2.3" },
-        owner_id: "user-1",
-        last_seen_at: "2026-01-20T10:01:00Z",
-        created_at: "2026-01-20T08:00:00Z",
-        updated_at: "2026-01-20T10:01:00Z",
-      },
-    ]);
-
-    renderIssueDetail();
-
-    await waitFor(() => {
-      expect(screen.getAllByText("Runtime").length).toBeGreaterThan(0);
-    });
-
-    expect(screen.getByText("Mortis Runtime")).toBeInTheDocument();
-    expect(screen.getByText("Running")).toBeInTheDocument();
-    expect(screen.getByText("Open runtime").closest("a")).toHaveAttribute(
-      "href",
-      "/test/runtimes?runtime=runtime-12345678",
-    );
   });
 
   it("shows 'not found' message when issue does not exist", async () => {

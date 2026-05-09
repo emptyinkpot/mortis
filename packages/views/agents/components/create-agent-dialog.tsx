@@ -4,12 +4,15 @@ import { useState, useEffect, useMemo } from "react";
 import { Cloud, ChevronDown, Globe, Lock, Loader2 } from "lucide-react";
 import { ProviderLogo } from "../../runtimes/components/provider-logo";
 import { ActorAvatar } from "../../common/actor-avatar";
+import { ModelDropdown } from "./model-dropdown";
 import type {
+  Agent,
   AgentVisibility,
   RuntimeDevice,
   MemberWithUser,
   CreateAgentRequest,
 } from "@multica/core/types";
+import { isImeComposing } from "@multica/core/utils";
 import {
   Dialog,
   DialogContent,
@@ -27,6 +30,13 @@ import { Button } from "@multica/ui/components/ui/button";
 import { Input } from "@multica/ui/components/ui/input";
 import { Label } from "@multica/ui/components/ui/label";
 import { toast } from "sonner";
+import {
+  AGENT_DESCRIPTION_MAX_LENGTH,
+  VISIBILITY_DESCRIPTION,
+  VISIBILITY_LABEL,
+} from "@multica/core/agents";
+import { CharCounter } from "./char-counter";
+import { useT } from "../../i18n";
 
 type RuntimeFilter = "mine" | "all";
 
@@ -35,6 +45,7 @@ export function CreateAgentDialog({
   runtimesLoading,
   members,
   currentUserId,
+  template,
   onClose,
   onCreate,
 }: {
@@ -42,12 +53,27 @@ export function CreateAgentDialog({
   runtimesLoading?: boolean;
   members: MemberWithUser[];
   currentUserId: string | null;
+  // When provided, the dialog opens in "Duplicate" mode: the visible
+  // fields (name / description / runtime / visibility / model) are
+  // pre-populated from this agent, and the hidden fields
+  // (instructions / custom_args / custom_env / max_concurrent_tasks)
+  // are forwarded to the create call so the new agent is a true clone.
+  // Skills are copied separately by the caller after createAgent
+  // succeeds — they're not part of CreateAgentRequest.
+  template?: Agent | null;
   onClose: () => void;
   onCreate: (data: CreateAgentRequest) => Promise<void>;
 }) {
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [visibility, setVisibility] = useState<AgentVisibility>("private");
+  const { t } = useT("agents");
+  const isDuplicate = !!template;
+  const [name, setName] = useState(
+    template ? `${template.name}${t(($) => $.create_dialog.duplicate_copy_suffix)}` : "",
+  );
+  const [description, setDescription] = useState(template?.description ?? "");
+  const [visibility, setVisibility] = useState<AgentVisibility>(
+    template?.visibility ?? "private",
+  );
+  const [model, setModel] = useState(template?.model ?? "");
   const [creating, setCreating] = useState(false);
   const [runtimeOpen, setRuntimeOpen] = useState(false);
   const [runtimeFilter, setRuntimeFilter] = useState<RuntimeFilter>("mine");
@@ -70,7 +96,11 @@ export function CreateAgentDialog({
     });
   }, [runtimes, runtimeFilter, currentUserId]);
 
-  const [selectedRuntimeId, setSelectedRuntimeId] = useState(filteredRuntimes[0]?.id ?? "");
+  // When duplicating, default to the template's runtime so the clone
+  // lands on the same machine — caller can still switch in the picker.
+  const [selectedRuntimeId, setSelectedRuntimeId] = useState(
+    template?.runtime_id ?? filteredRuntimes[0]?.id ?? "",
+  );
 
   useEffect(() => {
     if (!selectedRuntimeId && filteredRuntimes[0]) {
@@ -84,15 +114,37 @@ export function CreateAgentDialog({
     if (!name.trim() || !selectedRuntime) return;
     setCreating(true);
     try {
-      await onCreate({
+      // When duplicating, forward the hidden config fields the template
+      // carries (instructions / custom_args / custom_env / max_concurrent_tasks)
+      // so the clone is functional out of the box without the user
+      // having to walk back through every settings tab. Skills are
+      // copied by the caller in a follow-up setAgentSkills call.
+      const data: CreateAgentRequest = {
         name: name.trim(),
         description: description.trim(),
         runtime_id: selectedRuntime.id,
         visibility,
-      });
+        model: model.trim() || undefined,
+      };
+      if (template) {
+        if (template.instructions) data.instructions = template.instructions;
+        if (template.custom_args.length) data.custom_args = template.custom_args;
+        // Skip env when the template's values are redacted from the API
+        // response — copying placeholders would create a broken clone.
+        if (
+          !template.custom_env_redacted &&
+          Object.keys(template.custom_env).length > 0
+        ) {
+          data.custom_env = template.custom_env;
+        }
+        if (template.max_concurrent_tasks) {
+          data.max_concurrent_tasks = template.max_concurrent_tasks;
+        }
+      }
+      await onCreate(data);
       onClose();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "创建智能体失败");
+      toast.error(err instanceof Error ? err.message : t(($) => $.create_dialog.create_failed_toast));
       setCreating(false);
     }
   };
@@ -101,39 +153,53 @@ export function CreateAgentDialog({
     <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>创建智能体</DialogTitle>
+          <DialogTitle>
+            {isDuplicate ? t(($) => $.create_dialog.title_duplicate) : t(($) => $.create_dialog.title_create)}
+          </DialogTitle>
           <DialogDescription>
-            为当前工作区创建一个新的 AI 智能体。
+            {isDuplicate
+              ? t(($) => $.create_dialog.description_duplicate, { name: template!.name })
+              : t(($) => $.create_dialog.description_create)}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 min-w-0">
           <div>
-            <Label className="text-xs text-muted-foreground">名称</Label>
+            <Label className="text-xs text-muted-foreground">{t(($) => $.create_dialog.name_label)}</Label>
             <Input
               autoFocus
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="例如：深度研究智能体"
+              placeholder={t(($) => $.create_dialog.name_placeholder)}
               className="mt-1"
-              onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+              onKeyDown={(e) => {
+                if (isImeComposing(e)) return;
+                if (e.key === "Enter") handleSubmit();
+              }}
             />
           </div>
 
           <div>
-            <Label className="text-xs text-muted-foreground">简介</Label>
+            <Label className="text-xs text-muted-foreground">{t(($) => $.create_dialog.description_label)}</Label>
             <Input
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="这个智能体负责什么？"
+              placeholder={t(($) => $.create_dialog.description_placeholder)}
+              maxLength={AGENT_DESCRIPTION_MAX_LENGTH}
               className="mt-1"
             />
+            <div className="mt-1">
+              <CharCounter
+                length={[...description].length}
+                max={AGENT_DESCRIPTION_MAX_LENGTH}
+              />
+            </div>
           </div>
 
           <div>
-            <Label className="text-xs text-muted-foreground">可见性</Label>
+            <Label className="text-xs text-muted-foreground">{t(($) => $.create_dialog.visibility_label)}</Label>
             <div className="mt-1.5 flex gap-2">
               <button
                 type="button"
@@ -146,8 +212,10 @@ export function CreateAgentDialog({
               >
                 <Globe className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <div className="text-left">
-                  <div className="font-medium">工作区</div>
-                  <div className="text-xs text-muted-foreground">所有成员都可分配</div>
+                  <div className="font-medium">{VISIBILITY_LABEL.workspace}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {VISIBILITY_DESCRIPTION.workspace}
+                  </div>
                 </div>
               </button>
               <button
@@ -161,8 +229,10 @@ export function CreateAgentDialog({
               >
                 <Lock className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <div className="text-left">
-                  <div className="font-medium">私有</div>
-                  <div className="text-xs text-muted-foreground">仅你可分配</div>
+                  <div className="font-medium">{VISIBILITY_LABEL.private}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {VISIBILITY_DESCRIPTION.private}
+                  </div>
                 </div>
               </button>
             </div>
@@ -170,7 +240,7 @@ export function CreateAgentDialog({
 
           <div className="min-w-0">
             <div className="flex items-center justify-between">
-              <Label className="text-xs text-muted-foreground">运行时</Label>
+              <Label className="text-xs text-muted-foreground">{t(($) => $.create_dialog.runtime_label)}</Label>
               {hasOtherRuntimes && (
                 <div className="flex items-center gap-0.5 rounded-md bg-muted p-0.5">
                   <button
@@ -182,7 +252,7 @@ export function CreateAgentDialog({
                         : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
-                    我的
+                    {t(($) => $.create_dialog.runtime_filter_mine)}
                   </button>
                   <button
                     type="button"
@@ -193,7 +263,7 @@ export function CreateAgentDialog({
                         : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
-                    全部
+                    {t(($) => $.create_dialog.runtime_filter_all)}
                   </button>
                 </div>
               )}
@@ -213,18 +283,18 @@ export function CreateAgentDialog({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="truncate font-medium">
-                      {runtimesLoading ? "正在加载运行时..." : (selectedRuntime?.name ?? "暂无可用运行时")}
+                      {runtimesLoading ? t(($) => $.create_dialog.runtime_loading) : (selectedRuntime?.name ?? t(($) => $.create_dialog.runtime_none))}
                     </span>
                     {selectedRuntime?.runtime_mode === "cloud" && (
                       <span className="shrink-0 rounded bg-info/10 px-1.5 py-0.5 text-xs font-medium text-info">
-                        云端
+                        {t(($) => $.create_dialog.runtime_cloud_badge)}
                       </span>
                     )}
                   </div>
                   <div className="truncate text-xs text-muted-foreground">
                     {selectedRuntime
                       ? (getOwnerMember(selectedRuntime.owner_id)?.name ?? selectedRuntime.device_info)
-                      : "请先注册运行时，再创建智能体"}
+                      : t(($) => $.create_dialog.runtime_register_first)}
                   </div>
                 </div>
                 <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${runtimeOpen ? "rotate-180" : ""}`} />
@@ -249,7 +319,7 @@ export function CreateAgentDialog({
                           <span className="truncate font-medium">{device.name}</span>
                           {device.runtime_mode === "cloud" && (
                             <span className="shrink-0 rounded bg-info/10 px-1.5 py-0.5 text-xs font-medium text-info">
-                              云端
+                              {t(($) => $.create_dialog.runtime_cloud_badge)}
                             </span>
                           )}
                         </div>
@@ -275,17 +345,25 @@ export function CreateAgentDialog({
               </PopoverContent>
             </Popover>
           </div>
+
+          <ModelDropdown
+            runtimeId={selectedRuntime?.id ?? null}
+            runtimeOnline={selectedRuntime?.status === "online"}
+            value={model}
+            onChange={setModel}
+            disabled={!selectedRuntime}
+          />
         </div>
 
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>
-            取消
+            {t(($) => $.create_dialog.cancel)}
           </Button>
           <Button
             onClick={handleSubmit}
             disabled={creating || !name.trim() || !selectedRuntime}
           >
-            {creating ? "创建中..." : "创建"}
+            {creating ? t(($) => $.create_dialog.creating) : t(($) => $.create_dialog.create)}
           </Button>
         </DialogFooter>
       </DialogContent>

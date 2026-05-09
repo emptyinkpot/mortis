@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import dynamic from "next/dynamic";
 import { Plus, FolderKanban, UserMinus, Check } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { projectListOptions } from "@multica/core/projects/queries";
@@ -37,60 +36,21 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "@multica/ui/components/
 import type { Project, ProjectStatus, ProjectPriority, UpdateProjectRequest } from "@multica/core/types";
 import { PageHeader } from "../../layout/page-header";
 import { PriorityIcon } from "../../issues/components/priority-icon";
-const DeferredProjectCollaborationPanel = dynamic(
-  () =>
-    import("./project-collaboration-panel").then(
-      (mod) => mod.ProjectCollaborationPanel,
-    ),
-  {
-    ssr: false,
-    loading: () => <ProjectsCollaborationPlaceholder isLoading />,
-  },
-);
-
-function ProjectsCollaborationPlaceholder({
-  isLoading = false,
-  onLoadNow,
-}: {
-  isLoading?: boolean;
-  onLoadNow?: () => void;
-}) {
-  return (
-    <section className="border-b bg-muted/15">
-      <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-5 py-3">
-        <div className="space-y-1">
-          <p className="text-sm font-medium">项目协同面板按需加载</p>
-          <p className="text-xs text-muted-foreground">
-            默认先折叠协同区，需要时再展开加载，优先保证项目列表首屏。
-          </p>
-        </div>
-        {onLoadNow ? (
-          <Button size="sm" variant="outline" onClick={onLoadNow} disabled={isLoading}>
-            {isLoading ? "正在加载..." : "展开协同区"}
-          </Button>
-        ) : (
-          <span className="text-xs text-muted-foreground">
-            {isLoading ? "正在加载..." : "默认折叠"}
-          </span>
-        )}
-      </div>
-    </section>
-  );
-}
-
-function formatRelativeDate(date: string): string {
-  const diff = Date.now() - new Date(date).getTime();
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-  if (days < 1) return "今天";
-  if (days === 1) return "1天前";
-  if (days < 30) return `${days}天前`;
-  const months = Math.floor(days / 30);
-  return `${months}个月前`;
-}
+import { ProjectIcon } from "./project-icon";
+import { useT } from "../../i18n";
+import {
+  useProjectStatusLabels,
+  useProjectPriorityLabels,
+  useFormatRelativeDate,
+} from "./labels";
 
 function ProjectRow({ project }: { project: Project }) {
+  const { t } = useT("projects");
   const wsId = useWorkspaceId();
   const wsPaths = useWorkspacePaths();
+  const statusLabels = useProjectStatusLabels();
+  const priorityLabels = useProjectPriorityLabels();
+  const formatRelativeDate = useFormatRelativeDate();
   const statusCfg = PROJECT_STATUS_CONFIG[project.status];
   const priorityCfg = PROJECT_PRIORITY_CONFIG[project.priority];
   const updateProject = useUpdateProject();
@@ -118,7 +78,7 @@ function ProjectRow({ project }: { project: Project }) {
         href={wsPaths.projectDetail(project.id)}
         className="flex min-w-0 flex-1 items-center gap-2"
       >
-        <span className="shrink-0 w-[24px] text-center text-base">{project.icon || "📁"}</span>
+        <ProjectIcon project={project} size="md" />
         <span className="min-w-0 flex-1 truncate font-medium">{project.title}</span>
       </AppLink>
 
@@ -128,7 +88,7 @@ function ProjectRow({ project }: { project: Project }) {
           render={
             <button type="button" className="flex w-24 items-center justify-center gap-1 shrink-0 rounded px-1 py-0.5 hover:bg-accent/60 transition-colors cursor-pointer">
               <PriorityIcon priority={project.priority} />
-              <span className={cn("text-xs", priorityCfg.color)}>{priorityCfg.label}</span>
+              <span className={cn("text-xs", priorityCfg.color)}>{priorityLabels[project.priority]}</span>
             </button>
           }
         />
@@ -136,7 +96,7 @@ function ProjectRow({ project }: { project: Project }) {
           {PROJECT_PRIORITY_ORDER.map((p) => (
             <DropdownMenuItem key={p} onClick={() => handleUpdate({ priority: p as ProjectPriority })}>
               <PriorityIcon priority={p} />
-              <span>{PROJECT_PRIORITY_CONFIG[p].label}</span>
+              <span>{priorityLabels[p]}</span>
               {p === project.priority && <Check className="ml-auto h-3.5 w-3.5" />}
             </DropdownMenuItem>
           ))}
@@ -151,7 +111,7 @@ function ProjectRow({ project }: { project: Project }) {
               "inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium shrink-0 w-28 justify-center cursor-pointer hover:opacity-80 transition-opacity",
               statusCfg.badgeBg, statusCfg.badgeText,
             )}>
-              {statusCfg.label}
+              {statusLabels[project.status]}
             </button>
           }
         />
@@ -159,7 +119,7 @@ function ProjectRow({ project }: { project: Project }) {
           {PROJECT_STATUS_ORDER.map((s) => (
             <DropdownMenuItem key={s} onClick={() => handleUpdate({ status: s as ProjectStatus })}>
               <span className={cn("size-2 rounded-full", PROJECT_STATUS_CONFIG[s].dotColor)} />
-              <span>{PROJECT_STATUS_CONFIG[s].label}</span>
+              <span>{statusLabels[s]}</span>
               {s === project.status && <Check className="ml-auto h-3.5 w-3.5" />}
             </DropdownMenuItem>
           ))}
@@ -192,7 +152,7 @@ function ProjectRow({ project }: { project: Project }) {
             <button type="button" className="flex w-10 items-center justify-center shrink-0 rounded-full hover:ring-2 hover:ring-accent transition-all cursor-pointer">
               {project.lead_type && project.lead_id ? (
                 <Tooltip>
-                  <TooltipTrigger render={<span><ActorAvatar actorType={project.lead_type} actorId={project.lead_id} size={22} /></span>} />
+                  <TooltipTrigger render={<span><ActorAvatar actorType={project.lead_type} actorId={project.lead_id} size={22} enableHoverCard /></span>} />
                   <TooltipContent side="bottom">{getActorName(project.lead_type, project.lead_id)}</TooltipContent>
                 </Tooltip>
               ) : (
@@ -207,7 +167,7 @@ function ProjectRow({ project }: { project: Project }) {
               type="text"
               value={leadFilter}
               onChange={(e) => setLeadFilter(e.target.value)}
-              placeholder="指定负责人..."
+              placeholder={t(($) => $.lead.assign_placeholder)}
               className="w-full bg-transparent text-sm placeholder:text-muted-foreground outline-none"
             />
           </div>
@@ -218,11 +178,11 @@ function ProjectRow({ project }: { project: Project }) {
               className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent transition-colors"
             >
               <UserMinus className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="text-muted-foreground">未指定</span>
+              <span className="text-muted-foreground">{t(($) => $.lead.no_lead)}</span>
             </button>
             {filteredMembers.length > 0 && (
               <>
-                <div className="px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">成员</div>
+                <div className="px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">{t(($) => $.lead.members_group)}</div>
                 {filteredMembers.map((m) => (
                   <button
                     type="button"
@@ -238,7 +198,7 @@ function ProjectRow({ project }: { project: Project }) {
             )}
             {filteredAgents.length > 0 && (
               <>
-                <div className="px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">智能体</div>
+                <div className="px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">{t(($) => $.lead.agents_group)}</div>
                 {filteredAgents.map((a) => (
                   <button
                     type="button"
@@ -246,14 +206,14 @@ function ProjectRow({ project }: { project: Project }) {
                     onClick={() => { handleUpdate({ lead_type: "agent", lead_id: a.id }); setLeadOpen(false); }}
                     className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent transition-colors"
                   >
-                    <ActorAvatar actorType="agent" actorId={a.id} size={16} />
+                    <ActorAvatar actorType="agent" actorId={a.id} size={16} showStatusDot />
                     <span>{a.name}</span>
                   </button>
                 ))}
               </>
             )}
             {filteredMembers.length === 0 && filteredAgents.length === 0 && leadFilter && (
-              <div className="px-2 py-3 text-center text-sm text-muted-foreground">无结果</div>
+              <div className="px-2 py-3 text-center text-sm text-muted-foreground">{t(($) => $.lead.no_results)}</div>
             )}
           </div>
         </PopoverContent>
@@ -269,9 +229,9 @@ function ProjectRow({ project }: { project: Project }) {
 
 
 export function ProjectsPage() {
+  const { t } = useT("projects");
   const wsId = useWorkspaceId();
   const { data: projects = [], isLoading } = useQuery(projectListOptions(wsId));
-  const [showCollaboration, setShowCollaboration] = useState(false);
   const openCreateProject = () => useModalStore.getState().open("create-project");
 
   return (
@@ -280,22 +240,16 @@ export function ProjectsPage() {
       <PageHeader className="justify-between px-5">
         <div className="flex items-center gap-2">
           <FolderKanban className="h-4 w-4 text-muted-foreground" />
-          <h1 className="text-sm font-medium">项目</h1>
+          <h1 className="text-sm font-medium">{t(($) => $.page.title)}</h1>
           {!isLoading && projects.length > 0 && (
             <span className="text-xs text-muted-foreground tabular-nums">{projects.length}</span>
           )}
         </div>
         <Button size="sm" variant="outline" onClick={openCreateProject}>
           <Plus className="h-3.5 w-3.5 mr-1" />
-          新建项目
+          {t(($) => $.page.new_project)}
         </Button>
       </PageHeader>
-
-      {showCollaboration ? (
-        <DeferredProjectCollaborationPanel compact />
-      ) : (
-        <ProjectsCollaborationPlaceholder onLoadNow={() => setShowCollaboration(true)} />
-      )}
 
       {/* Table */}
       <div className="flex-1 overflow-y-auto">
@@ -319,9 +273,9 @@ export function ProjectsPage() {
         ) : projects.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
             <FolderKanban className="h-10 w-10 mb-3 opacity-30" />
-            <p className="text-sm">还没有项目</p>
+            <p className="text-sm">{t(($) => $.page.empty)}</p>
             <Button size="sm" variant="outline" className="mt-3" onClick={openCreateProject}>
-              创建第一个项目
+              {t(($) => $.page.create_first)}
             </Button>
           </div>
         ) : (
@@ -330,12 +284,12 @@ export function ProjectsPage() {
             <div className="sticky top-0 z-[1] flex h-8 items-center gap-2 border-b bg-muted/30 px-5 text-xs font-medium text-muted-foreground">
               {/* Icon spacer + Name */}
               <span className="shrink-0 w-[24px]" />
-              <span className="min-w-0 flex-1">名称</span>
-              <span className="w-24 text-center shrink-0">优先级</span>
-              <span className="w-28 text-center shrink-0">状态</span>
-              <span className="w-24 text-center shrink-0">进度</span>
-              <span className="w-10 text-center shrink-0">负责人</span>
-              <span className="w-20 text-right shrink-0">创建时间</span>
+              <span className="min-w-0 flex-1">{t(($) => $.table.name)}</span>
+              <span className="w-24 text-center shrink-0">{t(($) => $.table.priority)}</span>
+              <span className="w-28 text-center shrink-0">{t(($) => $.table.status)}</span>
+              <span className="w-24 text-center shrink-0">{t(($) => $.table.progress)}</span>
+              <span className="w-10 text-center shrink-0">{t(($) => $.table.lead)}</span>
+              <span className="w-20 text-right shrink-0">{t(($) => $.table.created)}</span>
             </div>
             {/* Rows */}
             {projects.map((project) => (

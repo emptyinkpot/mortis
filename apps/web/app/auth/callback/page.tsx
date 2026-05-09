@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { sanitizeNextUrl, useAuthStore } from "@multica/core/auth";
 import { workspaceKeys } from "@multica/core/workspace/queries";
-import { paths } from "@multica/core/paths";
+import { paths, resolvePostAuthDestination } from "@multica/core/paths";
 import { api } from "@multica/core/api";
 import {
   Card,
@@ -28,13 +28,13 @@ function CallbackContent() {
   useEffect(() => {
     const code = searchParams.get("code");
     if (!code) {
-      setError("缺少授权码");
+      setError("Missing authorization code");
       return;
     }
 
     const errorParam = searchParams.get("error");
     if (errorParam) {
-      setError(errorParam === "access_denied" ? "访问被拒绝" : errorParam);
+      setError(errorParam === "access_denied" ? "Access denied" : errorParam);
       return;
     }
 
@@ -57,26 +57,54 @@ function CallbackContent() {
           window.location.href = `multica://auth/callback?token=${encodeURIComponent(token)}`;
         })
         .catch((err) => {
-          setError(err instanceof Error ? err.message : "登录失败");
+          setError(err instanceof Error ? err.message : "Login failed");
         });
     } else {
       // Normal web flow
       loginWithGoogle(code, redirectUri)
-        .then(async () => {
+        .then(async (loggedInUser) => {
           const wsList = await api.listWorkspaces();
           qc.setQueryData(workspaceKeys.list(), wsList);
-          // URL is now the source of truth for the current workspace — the
-          // [workspaceSlug]/layout syncs stores + cookie once we navigate.
-          // Honor ?next= first (e.g. came from /invite/{id}), otherwise land
-          // in the first workspace's issues, or /workspaces/new for zero-workspace users.
-          const [first] = wsList;
-          const defaultDest = first
-            ? paths.workspace(first.slug).issues()
-            : paths.newWorkspace();
-          router.push(nextUrl || defaultDest);
+          const onboarded = loggedInUser.onboarded_at != null;
+
+          // 1. nextUrl wins: a `next=/invite/<id>` always survives the OAuth
+          //    round-trip — the user clicked a specific link and we should
+          //    honor exactly that destination.
+          if (nextUrl) {
+            router.push(nextUrl);
+            return;
+          }
+
+          // 2. Un-onboarded users may have pending invitations on their
+          //    email even when no `next=` was carried (came from a fresh
+          //    login on app.multica.ai instead of clicking the email link,
+          //    or `state` was lost across the round-trip). Look them up by
+          //    email and route to the batch /invitations page if any.
+          //    Already-onboarded users skip this lookup — their new invites
+          //    surface in the sidebar dropdown, not as a forced wall.
+          if (!onboarded) {
+            try {
+              const invites = await api.listMyInvitations();
+              if (invites.length > 0) {
+                qc.setQueryData(workspaceKeys.myInvitations(), invites);
+                router.push(paths.invitations());
+                return;
+              }
+            } catch {
+              // Network blip on the invite lookup is non-fatal — fall through
+              // to the normal post-auth destination so the user isn't stuck
+              // on a blank callback screen. Worst case they land on
+              // /onboarding and the sidebar will surface invites later.
+            }
+          }
+
+          // 3. Default: hand off to the resolver (onboarding for first-timers,
+          //    first workspace for returning users, /workspaces/new for
+          //    onboarded users with zero workspaces).
+          router.push(resolvePostAuthDestination(wsList, onboarded));
         })
         .catch((err) => {
-          setError(err instanceof Error ? err.message : "登录失败");
+          setError(err instanceof Error ? err.message : "Login failed");
         });
     }
   }, [searchParams, loginWithGoogle, router, qc]);
@@ -86,10 +114,10 @@ function CallbackContent() {
       <div className="flex min-h-screen items-center justify-center">
         <Card className="w-full max-w-sm">
           <CardHeader className="text-center">
-            <CardTitle className="text-2xl">正在打开 Mortis</CardTitle>
+            <CardTitle className="text-2xl">Opening Multica</CardTitle>
             <CardDescription>
-              现在应该会弹出打开 Mortis 桌面端的提示。如果没有反应，
-              请点击下方按钮。
+              You should see a prompt to open the Multica desktop app. If
+              nothing happens, click the button below.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex justify-center">
@@ -99,7 +127,7 @@ function CallbackContent() {
                 window.location.href = `multica://auth/callback?token=${encodeURIComponent(desktopToken)}`;
               }}
             >
-              打开 Mortis 桌面端
+              Open Multica Desktop
             </Button>
           </CardContent>
         </Card>
@@ -112,12 +140,12 @@ function CallbackContent() {
       <div className="flex min-h-screen items-center justify-center">
         <Card className="w-full max-w-sm">
           <CardHeader className="text-center">
-            <CardTitle className="text-2xl">登录失败</CardTitle>
+            <CardTitle className="text-2xl">Login Failed</CardTitle>
             <CardDescription>{error}</CardDescription>
           </CardHeader>
           <CardContent className="flex justify-center">
             <a href={paths.login()} className="text-primary underline-offset-4 hover:underline">
-              返回 Mortis
+              Back to login
             </a>
           </CardContent>
         </Card>
@@ -129,8 +157,8 @@ function CallbackContent() {
     <div className="flex min-h-screen items-center justify-center">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">正在进入 Mortis...</CardTitle>
-          <CardDescription>正在为你完成会话接管，请稍候。</CardDescription>
+          <CardTitle className="text-2xl">Signing in...</CardTitle>
+          <CardDescription>Please wait while we complete your login</CardDescription>
         </CardHeader>
         <CardContent className="flex justify-center">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
