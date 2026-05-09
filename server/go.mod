@@ -3,6 +3,7 @@ module github.com/multica-ai/multica/server
 go 1.26.1
 
 require (
+	github.com/go-sql-driver/mysql v1.9.3
 	github.com/aws/aws-sdk-go-v2 v1.41.5
 	github.com/aws/aws-sdk-go-v2/config v1.32.13
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.13
@@ -16,6 +17,7 @@ require (
 	github.com/jackc/pgx/v5 v5.8.0
 	github.com/lmittmann/tint v1.1.3
 	github.com/mattn/go-shellwords v1.0.13
+	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/oklog/ulid/v2 v2.1.1
 	github.com/pelletier/go-toml/v2 v2.3.0
 	github.com/prometheus/client_golang v1.23.2
