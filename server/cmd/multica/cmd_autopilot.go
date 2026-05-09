@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
@@ -103,6 +102,7 @@ func init() {
 	// list
 	autopilotListCmd.Flags().String("status", "", "Filter by status (active, paused)")
 	autopilotListCmd.Flags().String("output", "table", "Output format: table or json")
+	autopilotListCmd.Flags().Bool("full-id", false, "Show full UUIDs in table output")
 
 	// get
 	autopilotGetCmd.Flags().String("output", "json", "Output format: table or json")
@@ -111,12 +111,11 @@ func init() {
 	autopilotCreateCmd.Flags().String("title", "", "Autopilot title (required)")
 	autopilotCreateCmd.Flags().String("description", "", "Autopilot description (used as task prompt)")
 	autopilotCreateCmd.Flags().String("agent", "", "Assignee agent (name or ID) — required")
-	autopilotCreateCmd.Flags().String("mode", "", "Execution mode: create_issue or run_only (required)")
+	autopilotCreateCmd.Flags().String("mode", "", "Execution mode: create_issue (required). run_only is not yet supported end-to-end.")
 	autopilotCreateCmd.Flags().String("priority", "none", "Priority for created issues (none, low, medium, high, urgent)")
 	autopilotCreateCmd.Flags().String("project", "", "Project ID (optional)")
 	autopilotCreateCmd.Flags().String("issue-title-template", "", "Template for issue titles (create_issue mode)")
 	autopilotCreateCmd.Flags().String("output", "json", "Output format: table or json")
-	addBrowserTaskContextFlags(autopilotCreateCmd)
 
 	// update
 	autopilotUpdateCmd.Flags().String("title", "", "New title")
@@ -125,10 +124,9 @@ func init() {
 	autopilotUpdateCmd.Flags().String("project", "", "New project ID (use empty string to clear)")
 	autopilotUpdateCmd.Flags().String("priority", "", "New priority")
 	autopilotUpdateCmd.Flags().String("status", "", "New status (active, paused)")
-	autopilotUpdateCmd.Flags().String("mode", "", "New execution mode (create_issue or run_only)")
+	autopilotUpdateCmd.Flags().String("mode", "", "New execution mode (create_issue)")
 	autopilotUpdateCmd.Flags().String("issue-title-template", "", "New issue title template")
 	autopilotUpdateCmd.Flags().String("output", "json", "Output format: table or json")
-	addBrowserTaskContextFlags(autopilotUpdateCmd)
 
 	// delete
 	// (no flags)
@@ -189,15 +187,17 @@ func runAutopilotList(cmd *cobra.Command, _ []string) error {
 		return cli.PrintJSON(os.Stdout, resp)
 	}
 
+	fullID, _ := cmd.Flags().GetBool("full-id")
+	actors := loadActorDisplayLookup(ctx, client)
 	headers := []string{"ID", "TITLE", "STATUS", "MODE", "ASSIGNEE", "LAST_RUN"}
 	rows := make([][]string, 0, len(resp.Autopilots))
 	for _, a := range resp.Autopilots {
 		rows = append(rows, []string{
-			truncateID(strVal(a, "id")),
+			displayID(strVal(a, "id"), fullID),
 			strVal(a, "title"),
 			strVal(a, "status"),
 			strVal(a, "execution_mode"),
-			truncateID(strVal(a, "assignee_id")),
+			actors.agent(strVal(a, "assignee_id")),
 			strVal(a, "last_run_at"),
 		})
 	}
@@ -214,8 +214,13 @@ func runAutopilotGet(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
+	autopilotRef, err := resolveAutopilotID(ctx, client, args[0])
+	if err != nil {
+		return fmt.Errorf("resolve autopilot: %w", err)
+	}
+
 	var resp map[string]any
-	if err := client.GetJSON(ctx, "/api/autopilots/"+args[0], &resp); err != nil {
+	if err := client.GetJSON(ctx, "/api/autopilots/"+autopilotRef.ID, &resp); err != nil {
 		return fmt.Errorf("get autopilot: %w", err)
 	}
 
@@ -225,13 +230,14 @@ func runAutopilotGet(cmd *cobra.Command, args []string) error {
 	}
 
 	ap, _ := resp["autopilot"].(map[string]any)
+	actors := loadActorDisplayLookup(ctx, client)
 	headers := []string{"ID", "TITLE", "STATUS", "MODE", "ASSIGNEE", "LAST_RUN"}
 	rows := [][]string{{
-		truncateID(strVal(ap, "id")),
+		strVal(ap, "id"),
 		strVal(ap, "title"),
 		strVal(ap, "status"),
 		strVal(ap, "execution_mode"),
-		truncateID(strVal(ap, "assignee_id")),
+		actors.agent(strVal(ap, "assignee_id")),
 		strVal(ap, "last_run_at"),
 	}}
 	cli.PrintTable(os.Stdout, headers, rows)
@@ -257,10 +263,14 @@ func runAutopilotCreate(cmd *cobra.Command, _ []string) error {
 	}
 	mode, _ := cmd.Flags().GetString("mode")
 	if mode == "" {
-		return fmt.Errorf("--mode is required (create_issue or run_only)")
+		return fmt.Errorf("--mode is required (create_issue)")
 	}
-	if mode != "create_issue" && mode != "run_only" {
-		return fmt.Errorf("--mode must be create_issue or run_only")
+	// run_only is a valid value server-side but the dispatch path is not wired
+	// end-to-end (daemon /start resolves workspace only via issue/chat, and the
+	// agent prompt expects an issue ID). Keep the CLI to create_issue until the
+	// server path is fixed to avoid shipping a mode that returns 404 on start.
+	if mode != "create_issue" {
+		return fmt.Errorf("--mode must be create_issue (run_only is not yet supported end-to-end)")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -284,17 +294,14 @@ func runAutopilotCreate(cmd *cobra.Command, _ []string) error {
 		body["priority"] = v
 	}
 	if v, _ := cmd.Flags().GetString("project"); v != "" {
-		body["project_id"] = v
+		projectRef, err := resolveProjectID(ctx, client, v)
+		if err != nil {
+			return fmt.Errorf("resolve project: %w", err)
+		}
+		body["project_id"] = projectRef.ID
 	}
 	if v, _ := cmd.Flags().GetString("issue-title-template"); v != "" {
 		body["issue_title_template"] = v
-	}
-	taskContext, err := buildOptionalTaskContext(cmd)
-	if err != nil {
-		return err
-	}
-	if taskContext != nil {
-		body["task_context"] = json.RawMessage(taskContext)
 	}
 
 	var result map[string]any
@@ -319,6 +326,11 @@ func runAutopilotUpdate(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
+	autopilotRef, err := resolveAutopilotID(ctx, client, args[0])
+	if err != nil {
+		return fmt.Errorf("resolve autopilot: %w", err)
+	}
+
 	body := map[string]any{}
 	if cmd.Flags().Changed("title") {
 		v, _ := cmd.Flags().GetString("title")
@@ -341,7 +353,11 @@ func runAutopilotUpdate(cmd *cobra.Command, args []string) error {
 		if v == "" {
 			body["project_id"] = nil
 		} else {
-			body["project_id"] = v
+			projectRef, err := resolveProjectID(ctx, client, v)
+			if err != nil {
+				return fmt.Errorf("resolve project: %w", err)
+			}
+			body["project_id"] = projectRef.ID
 		}
 	}
 	if cmd.Flags().Changed("priority") {
@@ -354,8 +370,8 @@ func runAutopilotUpdate(cmd *cobra.Command, args []string) error {
 	}
 	if cmd.Flags().Changed("mode") {
 		v, _ := cmd.Flags().GetString("mode")
-		if v != "create_issue" && v != "run_only" {
-			return fmt.Errorf("--mode must be create_issue or run_only")
+		if v != "create_issue" {
+			return fmt.Errorf("--mode must be create_issue (run_only is not yet supported end-to-end)")
 		}
 		body["execution_mode"] = v
 	}
@@ -363,20 +379,13 @@ func runAutopilotUpdate(cmd *cobra.Command, args []string) error {
 		v, _ := cmd.Flags().GetString("issue-title-template")
 		body["issue_title_template"] = v
 	}
-	taskContext, err := buildOptionalTaskContext(cmd)
-	if err != nil {
-		return err
-	}
-	if taskContext != nil {
-		body["task_context"] = json.RawMessage(taskContext)
-	}
 
 	if len(body) == 0 {
 		return fmt.Errorf("no fields to update; use flags like --title, --description, --agent, --status, --mode, etc.")
 	}
 
 	var result map[string]any
-	if err := client.PatchJSON(ctx, "/api/autopilots/"+args[0], body, &result); err != nil {
+	if err := client.PatchJSON(ctx, "/api/autopilots/"+autopilotRef.ID, body, &result); err != nil {
 		return fmt.Errorf("update autopilot: %w", err)
 	}
 
@@ -397,10 +406,15 @@ func runAutopilotDelete(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	if err := client.DeleteJSON(ctx, "/api/autopilots/"+args[0]); err != nil {
+	autopilotRef, err := resolveAutopilotID(ctx, client, args[0])
+	if err != nil {
+		return fmt.Errorf("resolve autopilot: %w", err)
+	}
+
+	if err := client.DeleteJSON(ctx, "/api/autopilots/"+autopilotRef.ID); err != nil {
 		return fmt.Errorf("delete autopilot: %w", err)
 	}
-	fmt.Printf("Autopilot %s deleted.\n", args[0])
+	fmt.Printf("Autopilot %s deleted.\n", autopilotRef.Display)
 	return nil
 }
 
@@ -413,8 +427,13 @@ func runAutopilotTrigger(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	autopilotRef, err := resolveAutopilotID(ctx, client, args[0])
+	if err != nil {
+		return fmt.Errorf("resolve autopilot: %w", err)
+	}
+
 	var run map[string]any
-	if err := client.PostJSON(ctx, "/api/autopilots/"+args[0]+"/trigger", nil, &run); err != nil {
+	if err := client.PostJSON(ctx, "/api/autopilots/"+autopilotRef.ID+"/trigger", nil, &run); err != nil {
 		return fmt.Errorf("trigger autopilot: %w", err)
 	}
 
@@ -435,6 +454,11 @@ func runAutopilotRuns(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
+	autopilotRef, err := resolveAutopilotID(ctx, client, args[0])
+	if err != nil {
+		return fmt.Errorf("resolve autopilot: %w", err)
+	}
+
 	params := url.Values{}
 	if v, _ := cmd.Flags().GetInt("limit"); v > 0 {
 		params.Set("limit", fmt.Sprintf("%d", v))
@@ -442,7 +466,7 @@ func runAutopilotRuns(cmd *cobra.Command, args []string) error {
 	if v, _ := cmd.Flags().GetInt("offset"); v > 0 {
 		params.Set("offset", fmt.Sprintf("%d", v))
 	}
-	path := "/api/autopilots/" + args[0] + "/runs"
+	path := "/api/autopilots/" + autopilotRef.ID + "/runs"
 	if len(params) > 0 {
 		path += "?" + params.Encode()
 	}
@@ -464,10 +488,10 @@ func runAutopilotRuns(cmd *cobra.Command, args []string) error {
 	rows := make([][]string, 0, len(resp.Runs))
 	for _, r := range resp.Runs {
 		rows = append(rows, []string{
-			truncateID(strVal(r, "id")),
+			strVal(r, "id"),
 			strVal(r, "source"),
 			strVal(r, "status"),
-			truncateID(strVal(r, "issue_id")),
+			strVal(r, "issue_id"),
 			strVal(r, "triggered_at"),
 			strVal(r, "completed_at"),
 		})
@@ -505,8 +529,13 @@ func runAutopilotTriggerAdd(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
+	autopilotRef, err := resolveAutopilotID(ctx, client, args[0])
+	if err != nil {
+		return fmt.Errorf("resolve autopilot: %w", err)
+	}
+
 	var result map[string]any
-	if err := client.PostJSON(ctx, "/api/autopilots/"+args[0]+"/triggers", body, &result); err != nil {
+	if err := client.PostJSON(ctx, "/api/autopilots/"+autopilotRef.ID+"/triggers", body, &result); err != nil {
 		return fmt.Errorf("create trigger: %w", err)
 	}
 
@@ -548,8 +577,17 @@ func runAutopilotTriggerUpdate(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
+	autopilotRef, err := resolveAutopilotID(ctx, client, args[0])
+	if err != nil {
+		return fmt.Errorf("resolve autopilot: %w", err)
+	}
+	triggerRef, err := resolveAutopilotTriggerID(ctx, client, autopilotRef.ID, args[1])
+	if err != nil {
+		return fmt.Errorf("resolve trigger: %w", err)
+	}
+
 	var result map[string]any
-	path := "/api/autopilots/" + args[0] + "/triggers/" + args[1]
+	path := "/api/autopilots/" + autopilotRef.ID + "/triggers/" + triggerRef.ID
 	if err := client.PatchJSON(ctx, path, body, &result); err != nil {
 		return fmt.Errorf("update trigger: %w", err)
 	}
@@ -571,11 +609,20 @@ func runAutopilotTriggerDelete(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	path := "/api/autopilots/" + args[0] + "/triggers/" + args[1]
+	autopilotRef, err := resolveAutopilotID(ctx, client, args[0])
+	if err != nil {
+		return fmt.Errorf("resolve autopilot: %w", err)
+	}
+	triggerRef, err := resolveAutopilotTriggerID(ctx, client, autopilotRef.ID, args[1])
+	if err != nil {
+		return fmt.Errorf("resolve trigger: %w", err)
+	}
+
+	path := "/api/autopilots/" + autopilotRef.ID + "/triggers/" + triggerRef.ID
 	if err := client.DeleteJSON(ctx, path); err != nil {
 		return fmt.Errorf("delete trigger: %w", err)
 	}
-	fmt.Printf("Trigger %s deleted.\n", args[1])
+	fmt.Printf("Trigger %s deleted.\n", triggerRef.ID)
 	return nil
 }
 
