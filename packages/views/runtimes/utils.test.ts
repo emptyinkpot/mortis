@@ -1,132 +1,74 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
+import type { AgentRuntime } from "@multica/core/types";
+import { parseCodexConfigSummary } from "./utils";
 
-import { collectUnmappedModels, estimateCost, isModelPriced } from "./utils";
+function makeRuntime(overrides: Partial<AgentRuntime> = {}): AgentRuntime {
+  return {
+    id: "runtime-1",
+    workspace_id: "workspace-1",
+    daemon_id: "daemon-1",
+    name: "Codex (NEVERLETMEGO)",
+    runtime_mode: "local",
+    provider: "codex",
+    launch_header: "codex app-server",
+    status: "online",
+    device_info: "NEVERLETMEGO · codex-cli 0.122.0",
+    metadata: {},
+    owner_id: "user-1",
+    last_seen_at: null,
+    created_at: "2026-04-23T00:00:00.000Z",
+    updated_at: "2026-04-23T00:00:00.000Z",
+    ...overrides,
+  };
+}
 
-const zeroUsage = {
-  input_tokens: 0,
-  output_tokens: 0,
-  cache_read_tokens: 0,
-  cache_write_tokens: 0,
-};
-
-describe("estimateCost", () => {
-  it("prices the canonical Anthropic Sonnet 4.6 SKU", () => {
-    const cost = estimateCost({
-      ...zeroUsage,
-      model: "claude-sonnet-4-6",
-      input_tokens: 1_000_000,
-      output_tokens: 1_000_000,
-    });
-    // 1M × $3 input + 1M × $15 output = $18.
-    expect(cost).toBeCloseTo(18, 5);
+describe("parseCodexConfigSummary", () => {
+  it("returns null for non-Codex runtimes", () => {
+    expect(parseCodexConfigSummary(makeRuntime({ provider: "claude" }))).toBeNull();
   });
 
-  it("prices a Codex CLI session reporting gpt-5-codex", () => {
-    const cost = estimateCost({
-      ...zeroUsage,
-      model: "gpt-5-codex",
-      input_tokens: 1_000_000,
-      output_tokens: 1_000_000,
-      cache_read_tokens: 2_000_000,
-    });
-    // 1M × $1.25 + 1M × $10 + 2M × $0.125 = $11.50.
-    expect(cost).toBeCloseTo(11.5, 5);
+  it("surfaces a missing config state for Codex runtimes without metadata", () => {
+    const summary = parseCodexConfigSummary(makeRuntime({ status: "offline" }));
+
+    expect(summary?.visible).toBe(false);
+    expect(summary?.statusLabel).toBe("未上报");
+    expect(summary?.statusTone).toBe("missing");
+    expect(summary?.mcpServers).toEqual([]);
   });
 
-  it("strips dated snapshots before resolving (gpt-5-2025-08-07 → gpt-5)", () => {
-    const cost = estimateCost({
-      ...zeroUsage,
-      model: "gpt-5-2025-08-07",
-      input_tokens: 1_000_000,
-    });
-    expect(cost).toBeCloseTo(1.25, 5);
-  });
-
-  it("prices each dotted Codex catalog SKU at its own tier, not gpt-5", () => {
-    // Every dotted minor version is priced independently. The resolver does
-    // exact-match-after-date-strip (no startsWith fallback), so each row
-    // must exist on its own.
-    expect(
-      estimateCost({ ...zeroUsage, model: "gpt-5.5", input_tokens: 1_000_000 }),
-    ).toBeCloseTo(5, 5);
-    expect(
-      estimateCost({ ...zeroUsage, model: "gpt-5.4", output_tokens: 1_000_000 }),
-    ).toBeCloseTo(15, 5);
-    expect(
-      estimateCost({
-        ...zeroUsage,
-        model: "gpt-5.4-mini",
-        input_tokens: 1_000_000,
-        output_tokens: 1_000_000,
+  it("parses config snapshot metadata and merges MCP server names", () => {
+    const summary = parseCodexConfigSummary(
+      makeRuntime({
+        metadata: {
+          codex_config: {
+            source: "NEVERLETMEGO ~/.codex/config.toml",
+            model: "gpt-5.4",
+            model_provider: "crs",
+            model_reasoning_effort: "high",
+            approval_policy: "never",
+            sandbox_mode: "danger-full-access",
+            config_path: "C:\\Users\\ASUS-KL\\.codex\\config.toml",
+            mcp_servers: {
+              "frontend-patterns-mcp": {},
+              "github-delivery-mcp": {},
+            },
+          },
+          codex_mcp_servers: ["database-ops-mcp", "frontend-patterns-mcp"],
+        },
       }),
-    ).toBeCloseTo(0.75 + 4.5, 5);
-    expect(
-      estimateCost({
-        ...zeroUsage,
-        model: "gpt-5.3-codex",
-        input_tokens: 1_000_000,
-        output_tokens: 1_000_000,
-      }),
-    ).toBeCloseTo(1.75 + 14, 5);
-  });
+    );
 
-  it("flags catalog SKUs without a published price (gpt-5.5-mini) as unmapped", () => {
-    // `gpt-5.5-mini` is in the Codex catalog but OpenAI hasn't published a
-    // public rate. We refuse to absorb it into `gpt-5.5` — the diagnostic
-    // surfaces it instead so the team knows to add an explicit row.
-    expect(isModelPriced("gpt-5.5-mini")).toBe(false);
-    expect(
-      estimateCost({
-        ...zeroUsage,
-        model: "gpt-5.5-mini",
-        input_tokens: 1_000_000,
-      }),
-    ).toBe(0);
-  });
-
-  it("flags hypothetical future variants as unmapped instead of inheriting a relative's price", () => {
-    // No exact match → unmapped. Covers both dotted families (`gpt-5.99-codex`)
-    // and unknown sub-variants (`gpt-5-foo`); both must miss rather than
-    // silently inherit `gpt-5` pricing.
-    expect(isModelPriced("gpt-5.99-codex")).toBe(false);
-    expect(isModelPriced("gpt-5-foo")).toBe(false);
-    expect(
-      estimateCost({
-        ...zeroUsage,
-        model: "gpt-5.99-codex",
-        input_tokens: 1_000_000,
-      }),
-    ).toBe(0);
-  });
-
-  it("returns 0 for a genuinely unknown model so the UI can flag it", () => {
-    expect(
-      estimateCost({
-        ...zeroUsage,
-        model: "totally-made-up-model",
-        input_tokens: 1_000_000,
-      }),
-    ).toBe(0);
-  });
-});
-
-describe("isModelPriced", () => {
-  it("recognises both Claude and Codex/GPT families", () => {
-    expect(isModelPriced("claude-sonnet-4-6")).toBe(true);
-    expect(isModelPriced("gpt-5-codex")).toBe(true);
-    expect(isModelPriced("gpt-5-mini")).toBe(true);
-    expect(isModelPriced("o3")).toBe(true);
-    expect(isModelPriced("totally-made-up-model")).toBe(false);
-  });
-});
-
-describe("collectUnmappedModels", () => {
-  it("only surfaces names that miss every pricing tier", () => {
-    const rows = [
-      { ...zeroUsage, model: "claude-sonnet-4-6" },
-      { ...zeroUsage, model: "gpt-5-codex" },
-      { ...zeroUsage, model: "fictional-model-x" },
-    ];
-    expect(collectUnmappedModels(rows)).toEqual(["fictional-model-x"]);
+    expect(summary?.visible).toBe(true);
+    expect(summary?.sourceLabel).toBe("NEVERLETMEGO ~/.codex/config.toml");
+    expect(summary?.model).toBe("gpt-5.4");
+    expect(summary?.modelProvider).toBe("crs");
+    expect(summary?.reasoningEffort).toBe("high");
+    expect(summary?.approvalPolicy).toBe("never");
+    expect(summary?.sandboxMode).toBe("danger-full-access");
+    expect(summary?.mcpServers).toEqual([
+      "database-ops-mcp",
+      "frontend-patterns-mcp",
+      "github-delivery-mcp",
+    ]);
   });
 });

@@ -1,19 +1,14 @@
 import * as React from 'react'
 import ReactMarkdown, { type Components, defaultUrlTransform } from 'react-markdown'
-import rehypeKatex from 'rehype-katex'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
-import remarkBreaks from 'remark-breaks'
 import remarkGfm from 'remark-gfm'
-import remarkMath from 'remark-math'
 import { FileText, Download } from 'lucide-react'
 import { cn } from '@multica/ui/lib/utils'
 import { CodeBlock, InlineCode } from './CodeBlock'
 import { preprocessFileCards } from './file-cards'
 import { preprocessLinks } from './linkify'
 import { preprocessMentionShortcodes } from './mentions'
-import 'katex/dist/katex.min.css'
-import './markdown.css'
 
 /**
  * Render modes for markdown content:
@@ -81,7 +76,6 @@ const sanitizeSchema = {
     code: [
       ...(defaultSchema.attributes?.code ?? []),
       ['className', /^language-/],
-      ['className', /^math-/],
       ['className', /^hljs/],
     ],
     img: [
@@ -406,8 +400,8 @@ export function Markdown({
   return (
     <div className={cn('markdown-content break-words', className)}>
       <ReactMarkdown
-        remarkPlugins={[remarkMath, remarkBreaks, [remarkGfm, { singleTilde: false }]]}
-        rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema], rehypeKatex]}
+        remarkPlugins={[[remarkGfm, { singleTilde: false }]]}
+        rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema]]}
         urlTransform={urlTransform}
         components={components}
       >

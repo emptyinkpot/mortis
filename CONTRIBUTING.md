@@ -1,6 +1,57 @@
+---
+title: Contributing Guide
+status: compatibility-supporting
+audience: contributors
+scope: local development workflow for the mortis source repo
+---
+
 # Contributing Guide
 
-This guide documents the local development workflow for contributors working on the Multica codebase.
+This guide documents the local development workflow for contributors working on
+the Mortis source repo, which still runs on top of a Multica-compatible codebase.
+
+> Scope note: this file covers contributor workflow, local checkout conventions,
+> worktree usage, and verification flow.
+> It is not the source of truth for the current Mortis private production
+> deployment. For current runtime facts and operator shortcuts, use `README.md`,
+> `project.json`, and `MORTIS_PRIVATE_DEPLOYMENT_NOTES.md`.
+
+## Mortis Remote-First Rule
+
+The current shared Mortis source worksite is:
+
+```text
+ubuntu@124.220.233.126:/srv/multica
+```
+
+For private production-facing changes, use this flow:
+
+```text
+edit /srv/multica
+-> validate remotely
+-> commit in /srv/multica
+-> push GitHub main
+```
+
+Local checkouts are contributor environments and synchronized copies. They must not override the remote-first runtime rule documented in `AI_CONTEXT.md` and `docs/operations/current-runtime-map.md`.
+
+## Role In The Doc Stack
+
+- `README.md` defines the current Mortis project truth and entrypoints
+- `project.json` is the machine-readable project entry
+- `MORTIS_PRIVATE_DEPLOYMENT_NOTES.md` records current Mortis private runtime facts
+- this file defines contributor-local setup, worktree, and verification workflow
+
+If this file conflicts with `README.md`, `project.json`, or
+`MORTIS_PRIVATE_DEPLOYMENT_NOTES.md` about the current private deployment,
+those current-state documents win.
+
+## Current Boundary
+
+- This file may document local development defaults such as `.env`, `.env.worktree`,
+  `localhost` ports, shared PostgreSQL, and contributor verification flow.
+- Those defaults are local development truth, not current Mortis private
+  production binds.
 
 It covers:
 
@@ -373,8 +424,7 @@ done
 
 #### 2. Create a test user and token (automated auth)
 
-For deterministic local automation, set `MULTICA_DEV_VERIFICATION_CODE=888888`
-in your env file before starting the backend:
+In non-production environments the verification code is fixed at `888888`:
 
 ```bash
 curl -s -X POST "$SERVER/auth/send-code" \
@@ -477,9 +527,7 @@ This automatically:
 3. Starts and manages its own daemon instance
 4. Connects to the local backend
 
-Login in the Desktop UI with `dev@localhost` and the generated code from the
-backend logs. If you set `MULTICA_DEV_VERIFICATION_CODE=888888` before starting
-the backend, you can use `888888` instead.
+Login in the Desktop UI with `dev@localhost` and code `888888`.
 
 If the backend runs on a non-default port (worktree), create
 `apps/desktop/.env.development.local`:
@@ -594,19 +642,6 @@ If you want to stop PostgreSQL and keep your local databases:
 ```bash
 make db-down
 ```
-
-If you want a fresh database for the current checkout only (drops the
-database named in `POSTGRES_DB`, recreates it, and runs all migrations):
-
-```bash
-make stop        # stop backend/frontend first
-make db-reset
-make start
-```
-
-- only affects the current env's database; other worktree databases are untouched
-- refuses to run if `DATABASE_URL` points at a remote host
-- pass `ENV_FILE=.env.worktree` to target a specific worktree
 
 If you want to wipe all local PostgreSQL data for this repo:
 

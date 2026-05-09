@@ -1,0 +1,919 @@
+{
+  "schema_version": 8,
+  "last_verified_at": "2026-05-06T19:20:00+08:00",
+  "purpose": "Canonical private address book, execution-station map, and permission-gap record for the Mortis QQ AI studio. Agents and operators should read this before asking in QQ where the database, repo, logs, OpenList, NapCat services, or Codex worker execution path are.",
+  "source_roots": {
+    "details_source": "docs/source-roots.json",
+    "production_canonical_branch": "main",
+    "production_canonical_local_root": "E:\\My Project\\Mortis",
+    "production_canonical_server_root": "/srv/multica",
+    "retired_local_root": "E:\\My Project\\Mortis-deploy-l3",
+    "retired_merged_into_main_by": "913ba1e",
+    "rule": "Remote-first source root is ubuntu@124.220.233.126:/srv/multica. Local checkout E:\\My Project\\Mortis is retired and must not be used as the default source of truth. Any future local clone is only a synchronized copy."
+  },
+  "production": {
+    "ssh_host": "ubuntu@124.220.233.126",
+    "root": "/srv/multica",
+    "compose_file": "/srv/multica/docker-compose.selfhost.yml",
+    "backend_container": "multica-backend-1",
+    "frontend_public_origin": "https://mortis.tengokukk.com",
+    "backend_health_on_host": "http://127.0.0.1:8088/health",
+    "backend_internal_api_base_url": "http://127.0.0.1:8080",
+    "backend_public_note": "The public frontend domain is https://mortis.tengokukk.com. Backend API exposure depends on nginx/service routing; verify before publishing a public API URL."
+  },
+  "database": {
+    "service": "postgres",
+    "container": "multica-postgres-1",
+    "database": "multica",
+    "user": "multica",
+    "host_port": "127.0.0.1:55432",
+    "compose_env_keys": [
+      "POSTGRES_DB",
+      "POSTGRES_USER",
+      "POSTGRES_PORT",
+      "DATABASE_URL"
+    ],
+    "secret_policy": "Do not write DB passwords into this JSON or QQ. Read credentials from /srv/multica/.env on the server when authorized.",
+    "agent_tables": [
+      "agent_transcripts",
+      "agent_journals",
+      "agent_memories",
+      "agent_knowledge_items",
+      "agent_shared_threads",
+      "agent_cognitive_events",
+      "agent_memory_items",
+      "agent_social_observations",
+      "agent_learning_jobs",
+      "agent_relationships",
+      "agent_emotions"
+    ]
+  },
+  "repository_and_execution": {
+    "production_repo_path": "/srv/multica",
+    "backend_readonly_source_mount": "/source:ro",
+    "role_repo_url": "file:///source",
+    "local_role_repo_path": "/srv/multica",
+    "agent_workspace_root": "/srv/multica/agent-workspaces",
+    "codex_home": "/srv/multica/codex-home",
+    "codex_bin_env": "MORTIS_CODEX_BIN=codex",
+    "codex_model_env": "MORTIS_CODEX_MODEL=gpt-5.4",
+    "codex_timeout_env": "MORTIS_CODEX_TIMEOUT_SECONDS",
+    "tester_world_evidence_env": {
+      "ci_status_source": "MORTIS_CI_STATUS_SOURCE",
+      "staging_url": "MORTIS_STAGING_URL",
+      "observability_url": "MORTIS_OBSERVABILITY_URL"
+    },
+    "builder_runtime_name": "builder-local-codex",
+    "codex_noninteractive_command": "codex exec",
+    "codex_default_args": "exec --sandbox workspace-write -",
+    "codex_production_args_when_sandbox_bypass_enabled": "exec --dangerously-bypass-approvals-and-sandbox -",
+    "dispatcher_enabled_env": "MORTIS_ROLE_DISPATCHER_ENABLED=true",
+    "sandbox_policy": "Production currently allows Codex sandbox bypass for dispatcher execution. Treat this as high-trust server automation, not per-QQ-account shell access.",
+    "current_worker_contract": {
+      "entry": "approved builder role_action",
+      "workspace_pattern": "/srv/multica/agent-workspaces/action-<action_id>/repo",
+      "branch_pattern": "mortis/action-<action_id>",
+      "prompt_file": "/srv/multica/agent-workspaces/action-<action_id>/builder-prompt.md",
+      "commit_policy": "local commit inside the worker branch; do not push main; do not deploy",
+      "completion_report": "role_invocations.result.execution_report, studio_artifacts commit/test_report rows, automatic Tester verification_report, and QQ notifier/CEO final summary"
+    },
+    "last_verified_builder_tester_chain": {
+      "status": "passed",
+      "verified_at": "2026-05-06T18:35:00+08:00",
+      "builder_action_id": "ee7997ce-f86d-49fc-8746-1ca017d39df9",
+      "builder_invocation_id": "7fcda75b-e024-419a-b915-9b2677b3579b",
+      "builder_runtime": "builder-local-codex",
+      "builder_status": "completed",
+      "builder_commit": "5f99747fec3eb0c8666d578b846f5742008f35bf",
+      "builder_branch": "mortis/action-ee7997ce-f86d-49fc-8746-1ca017d39df9",
+      "builder_changed_files": [
+        "server/internal/roles/router.go",
+        "mortis-l3-proof.txt",
+        "server/internal/roles/router_selfcheck_test.go"
+      ],
+      "tester_action_id": "6246b53b-66c7-413e-b827-63fc03e78681",
+      "tester_invocation_id": "b3c8dac0-4a2b-4238-9018-b3f13a4d9ac5",
+      "tester_runtime": "tester-local-verifier",
+      "tester_status": "completed",
+      "tester_verified_from": "7fcda75b-e024-419a-b915-9b2677b3579b",
+      "artifact_evidence": [
+        "Builder commit artifact exists in studio_artifacts.",
+        "Builder test_report artifact exists in studio_artifacts.",
+        "Tester verification_report artifact exists in studio_artifacts and references the Builder invocation.",
+        "QQ notifier marked both Builder and Tester invocations as notified to group 474958794."
+      ],
+      "meaning": "A QQ-routed code task can now create a real Builder action, run Codex in a worker checkout, commit changes, enqueue Tester verification, run verifier commands, write artifacts, and report back to QQ."
+    },
+    "verification_evidence_contract": {
+      "status": "implemented_schema_without_external_readers",
+      "implemented_at": "2026-05-06T18:50:00+08:00",
+      "report_field": "role_invocations.result.execution_report.verification_evidence",
+      "fields": {
+        "local_commands": "real command evidence from tester-local-verifier",
+        "artifact_graph": "source Builder action/invocation linkage",
+        "ci": "missing until MORTIS_CI_STATUS_SOURCE has a real read-only reader",
+        "staging": "missing until MORTIS_STAGING_URL has a real staging smoke/check reader",
+        "observability": "missing until MORTIS_OBSERVABILITY_URL has a real logs/monitoring reader"
+      },
+      "qq_summary_behavior": "Tester QQ notifications include evidence statuses such as ci=missing, staging=missing, observability=missing, artifact_graph=linked.",
+      "truth_rule": "Missing CI/staging/observability evidence must be reported as missing, not treated as pass."
+    },
+    "server_codex_smoke_test": {
+      "status": "passed",
+      "verified_at": "2026-05-06T13:40:50+08:00",
+      "backend_container": "multica-backend-1",
+      "codex_path": "/usr/local/bin/codex",
+      "codex_version": "codex-cli 0.128.0",
+      "provider_seen_by_codex": "sub2api",
+      "model_seen_by_codex": "gpt-5.5",
+      "model_note": "Later production action execution was pinned to MORTIS_CODEX_MODEL=gpt-5.4 after gpt-5.5 returned capacity errors.",
+      "sandbox_seen_by_codex": "danger-full-access",
+      "approval_seen_by_codex": "never",
+      "smoke_workspace": "/srv/multica/agent-workspaces/smoke-codex-20260506-034050/repo",
+      "repo_source": "file:///source",
+      "branch": "mortis/smoke-codex-20260506-034050",
+      "artifact": ".mortis-smoke.txt",
+      "artifact_content": "hello from worker",
+      "git_status_evidence": "?? .mortis-smoke.txt",
+      "diff_evidence": "new file .mortis-smoke.txt with one line: hello from worker",
+      "meaning": "The production backend container can run non-interactive Codex in a worker checkout and produce a real git diff. This validates the Builder execution station baseline; the later last_verified_builder_tester_chain validates the Builder-to-Tester artifact chain."
+    }
+  },
+  "dual_system_execution_model": {
+    "principle": "QQ AI personas are the public communication layer. Codex workers are the execution-station layer. Do not confuse the two.",
+    "public_qq_layer": {
+      "responsibilities": [
+        "receive tasks",
+        "ask clarifying questions",
+        "confirm acceptance criteria",
+        "show handoff owner and next step",
+        "report blocked/completed status to QQ"
+      ],
+      "not_responsible_for": [
+        "direct shell execution from QQ account",
+        "pretending to have independent server login",
+        "using QQ group chat as the private work bus"
+      ]
+    },
+    "private_worker_layer": {
+      "responsibilities": [
+        "clone source into an isolated workspace",
+        "create a task branch",
+        "run Codex non-interactively with a complete engineering prompt",
+        "modify files",
+        "run required tests",
+        "commit changes",
+        "write execution report"
+      ],
+      "current_implementation": "Builder actions are executed by server/internal/roles/builder_runtime.go through the centralized role dispatcher.",
+      "current_limit": "Tester now has an MVP local verifier runtime and automatic Builder handoff. CI/test-environment integration is still incomplete."
+    },
+    "required_flow_for_real_work": [
+      "Human sends task in QQ.",
+      "CEO/Builder creates or routes a structured role action.",
+      "Dispatcher claims an approved Builder action.",
+      "Builder runtime creates /srv/multica/agent-workspaces/action-<id>/repo.",
+      "Codex worker runs with a full prompt and edits code.",
+      "Worker commits and runs tests.",
+      "Builder completion enqueues a Tester verification action with branch, commit, source invocation, and source workspace.",
+      "Tester verifies, writes a verification_report artifact with structured verification_evidence, and marks Builder artifacts with verification status.",
+      "QQ receives implementation result, verification result, and remaining risk through the notifier/CEO final summary."
+    ]
+  },
+  "action_contract": {
+    "minimum_fields": [
+      "action_type",
+      "owner",
+      "repo",
+      "branch",
+      "objective",
+      "acceptance",
+      "commands",
+      "risk_level",
+      "status"
+    ],
+    "example": {
+      "action_type": "code_change",
+      "owner": "builder",
+      "repo": "mortis",
+      "branch": "mortis/action-<id>",
+      "objective": "修复或实现 QQ 中提出的具体任务",
+      "acceptance": [
+        "目标行为可复现/可验收",
+        "不扩大范围",
+        "不修改 secrets",
+        "测试命令有结果"
+      ],
+      "commands": [
+        "go test ./internal/qqbridge ./internal/qqagents ./internal/roles ./cmd/server",
+        "git diff --check HEAD"
+      ],
+      "status": "queued_or_approved"
+    },
+    "qq_handoff_template": [
+      "CEO：@Builder 接这个任务，产出 diff + 测试命令。",
+      "Builder：收到，开执行工位，完成后给 commit/diff/test。",
+      "Builder：完成，commit <sha>，交给 @Tester。",
+      "Tester：收到，开始验证。",
+      "Tester：验证结果 <passed/failed/blocked>，交回 @CEO。",
+      "CEO：汇总结果和剩余风险。"
+    ]
+  },
+  "access_matrix": {
+    "principle": "Shared context, permissions, tools, status, and handoff protocol are required before QQ personas can behave like a production software studio.",
+    "resources": [
+      {
+        "resource": "repository",
+        "address": "/srv/multica; backend readonly mount /source:ro; role repo URL file:///source",
+        "credential_source": "server filesystem and dispatcher runtime, not QQ",
+        "status": "partially_available",
+        "roles": {
+          "ceo": {
+            "read": true,
+            "write": false,
+            "purpose": "know repo location and route work"
+          },
+          "builder": {
+            "read": true,
+            "write_dev_branch": true,
+            "write_main": false,
+            "purpose": "execute approved role_actions in isolated workspaces and task branches"
+          },
+          "tester": {
+            "read": true,
+            "write": false,
+            "purpose": "run MVP local verification for approved Tester actions; fuller Builder branch handoff still needs integration"
+          },
+          "watcher": {
+            "read": true,
+            "write": false,
+            "purpose": "read docs/source context for research summaries"
+          }
+        },
+        "gap": "Explicit branch/worktree allocation must be recorded per action; remote push/PR flow is not fully formalized."
+      },
+      {
+        "resource": "requirements_and_product_docs",
+        "address": "README.md, README.zh-CN.md, docs/, project-local planning docs when present",
+        "credential_source": "repo read access",
+        "status": "partially_available",
+        "roles": {
+          "ceo": {
+            "read": true,
+            "write": true,
+            "purpose": "turn goals into structured work contracts"
+          },
+          "builder": {
+            "read": true,
+            "write": false,
+            "purpose": "derive implementation scope"
+          },
+          "tester": {
+            "read": true,
+            "write": true,
+            "purpose": "write acceptance standards and regression lists"
+          },
+          "watcher": {
+            "read": true,
+            "write": true,
+            "purpose": "write research cards and source summaries"
+          }
+        },
+        "gap": "No single canonical product/spec index yet. Add one if multiple docs conflict."
+      },
+      {
+        "resource": "test_environment",
+        "address": "not_configured",
+        "credential_source": "not_configured",
+        "status": "missing",
+        "roles": {
+          "ceo": {
+            "read": true,
+            "write": false
+          },
+          "builder": {
+            "read": true,
+            "write": false
+          },
+          "tester": {
+            "read": true,
+            "write": false
+          },
+          "watcher": {
+            "read": false,
+            "write": false
+          }
+        },
+        "gap": "Need staging/dev URL, API base, test accounts, seed data, and command matrix."
+      },
+      {
+        "resource": "ci_results",
+        "address": "not_configured",
+        "credential_source": "not_configured",
+        "status": "missing",
+        "roles": {
+          "ceo": {
+            "read": true,
+            "write": false
+          },
+          "builder": {
+            "read": true,
+            "write": false
+          },
+          "tester": {
+            "read": true,
+            "write": false
+          },
+          "watcher": {
+            "read": false,
+            "write": false
+          }
+        },
+        "gap": "Need CI provider URL/API, project identifier, readonly token source, and failure-log redaction policy."
+      },
+      {
+        "resource": "logs_and_monitoring",
+        "address": "backend docker logs available to server operators; no stable dashboard URL configured",
+        "credential_source": "server operator SSH today; dashboard token not configured",
+        "status": "partial_operator_only",
+        "roles": {
+          "ceo": {
+            "read": true,
+            "write": false,
+            "audit_required": true
+          },
+          "builder": {
+            "read": true,
+            "write": false,
+            "audit_required": true
+          },
+          "tester": {
+            "read": true,
+            "write": false,
+            "audit_required": true
+          },
+          "watcher": {
+            "read": false,
+            "write": false
+          }
+        },
+        "gap": "Need read-only log/monitoring dashboard address, role access policy, retention, and secret redaction."
+      },
+      {
+        "resource": "issue_tracker",
+        "address": "not_configured",
+        "credential_source": "not_configured",
+        "status": "missing",
+        "roles": {
+          "ceo": {
+            "read": true,
+            "write": true
+          },
+          "builder": {
+            "read": true,
+            "write": true
+          },
+          "tester": {
+            "read": true,
+            "write": true
+          },
+          "watcher": {
+            "read": true,
+            "write": true
+          }
+        },
+        "gap": "Need GitHub/Gitea/Jira/other issue URL, label scheme, write token source, and owner rules."
+      },
+      {
+        "resource": "production",
+        "address": "ubuntu@124.220.233.126 /srv/multica",
+        "credential_source": "operator-controlled SSH only",
+        "status": "operator_only",
+        "roles": {
+          "ceo": {
+            "read_emergency": true,
+            "write": false,
+            "audit_required": true
+          },
+          "builder": {
+            "read_emergency": true,
+            "write": false,
+            "audit_required": true
+          },
+          "tester": {
+            "read_emergency": true,
+            "write": false,
+            "audit_required": true
+          },
+          "watcher": {
+            "read_emergency": false,
+            "write": false,
+            "audit_required": true
+          }
+        },
+        "gap": "Do not grant production write to QQ personas. If needed later, create audited break-glass read-only access first."
+      },
+      {
+        "resource": "external_research_ingestion",
+        "address": "not_configured for scheduled browser/Bilibili/GitHub/blog ingestion",
+        "credential_source": "not_configured",
+        "status": "missing",
+        "roles": {
+          "watcher": {
+            "read": true,
+            "write_knowledge_cards": true
+          },
+          "ceo": {
+            "read": true,
+            "write": false
+          },
+          "builder": {
+            "read": true,
+            "write": false
+          },
+          "tester": {
+            "read": true,
+            "write": false
+          }
+        },
+        "gap": "Need browser/search/Bilibili/GitHub ingestion jobs, source credibility scoring, and OpenList knowledge-card export."
+      }
+    ]
+  },
+  "shared_workspace_memory_target": {
+    "current_tables": [
+      "agent_shared_threads",
+      "agent_cognitive_events",
+      "agent_journals",
+      "agent_memories",
+      "agent_knowledge_items",
+      "studio_resources",
+      "studio_state",
+      "studio_artifacts",
+      "agent_feed_items",
+      "agent_saved_items",
+      "agent_life_events",
+      "role_actions",
+      "role_invocations"
+    ],
+    "missing_or_future_tables": [
+      "studio_tasks",
+      "studio_decisions",
+      "studio_blockers",
+      "studio_handoffs"
+    ],
+    "rule": "Agents should know current goal, owner, blocker, next step, and artifact before talking. If no artifact or action exists, they should say it is not started instead of pretending work happened."
+  },
+  "studio_os": {
+    "principle": "Mortis is moving from AI chat personas to an AI Native Software Studio. The bottleneck is shared operational context, observability, artifacts, verification, and durable organization memory.",
+    "state_table": "studio_state",
+    "state_keys": {
+      "persona_layer": {
+        "status": "partial",
+        "owner_role": "ceo",
+        "summary": "GLM QQ personas can chat, discuss, plan, and route work, but QQ is not the private work bus."
+      },
+      "execution_layer": {
+        "status": "partial",
+        "owner_role": "builder",
+        "summary": "Dispatcher and builder-local-codex can execute approved Builder actions in isolated worker checkouts."
+      },
+      "tester_runtime": {
+        "status": "partial",
+        "owner_role": "tester",
+        "summary": "tester-local-verifier is an MVP that runs contract commands on Builder workspaces and emits verification-report artifacts; CI/staging and branch handoff still need hardening."
+      },
+      "ci_results": {
+        "status": "missing",
+        "owner_role": "tester",
+        "summary": "No CI provider URL/API/token source is recorded."
+      },
+      "logs_monitoring": {
+        "status": "operator_only",
+        "owner_role": "ceo",
+        "summary": "Operator can read Docker logs through server access; no stable read-only dashboard is configured."
+      },
+      "issue_tracker": {
+        "status": "missing",
+        "owner_role": "ceo",
+        "summary": "No durable issue tracker write path is configured."
+      },
+      "watcher_ingestion": {
+        "status": "missing",
+        "owner_role": "watcher",
+        "summary": "Scheduled browser/Bilibili/GitHub/blog ingestion is not productized yet."
+      },
+      "artifact_first_workflow": {
+        "status": "partial",
+        "owner_role": "ceo",
+        "summary": "studio_artifacts exists; every real task should produce a diff, commit, test report, design note, research card, operation report, or explicit blocked artifact."
+      },
+      "digital_human_behavior_layer": {
+        "status": "partial",
+        "owner_role": "watcher",
+        "summary": "agent_feed_items, agent_saved_items, and agent_life_events provide a durable AI life stream. QQ public feed capture and idle life pulses exist; scheduled external ingestion and real media/file sharing are still missing."
+      }
+    },
+    "priority_order": [
+      "P0: keep tester-local-verifier independent and wire Builder completion to Tester actions reliably.",
+      "P0: add CI/log/monitoring readers so agents can inspect engineering world state.",
+      "P1: keep studio_state current for active tasks, blocked tasks, recent failures, and next owners.",
+      "P1: make delivery artifact-first through studio_artifacts and OpenList.",
+      "P2: implement Watcher knowledge ingestion jobs for Bilibili/GitHub/blog/docs.",
+      "P2: implement Digital Human Behavior Layer sharing: saved memes/videos/repos/files through OpenList plus QQ media/file APIs.",
+      "P2: deepen long-term organization memory and private LLM deliberation."
+    ],
+    "truth_rule": "Agents must cite a real action, invocation, artifact, command result, CI/log evidence, feed item, saved item, or explicit blocked reason. QQ discussion alone is not delivery."
+  },
+  "digital_human_behavior_layer": {
+    "principle": "The QQ personas should develop a persistent digital life, not just reactive replies. Do not use random stickers/files as a shortcut.",
+    "life_stream_flow": [
+      "continuous feed",
+      "mood/current interest update",
+      "saved item",
+      "emotion-driven share trigger",
+      "memory update"
+    ],
+    "tables": {
+      "agent_feed_items": "feed signals from QQ now; later Bilibili/GitHub/blog/browser ingestion",
+      "agent_saved_items": "memes, videos, repos, articles, files, research cards, and links saved for contextual sharing",
+      "agent_life_events": "idle life pulses, mood, current obsession, social impulse, and internal digital-life events"
+    },
+    "current_status": {
+      "qq_public_feed_capture": "partial",
+      "idle_life_pulse": "partial",
+      "external_bilibili_github_blog_ingestion": "missing",
+      "qq_media_file_sending": "missing",
+      "openlist_media_cards": "missing"
+    },
+    "behavior_rules": [
+      "No random expression timers.",
+      "Expression must be emotion-driven and topic-relevant.",
+      "Shared files/links should have a source and artifact path.",
+      "Watcher owns scheduled feed ingestion after tools are configured.",
+      "Group-culture learning is public-group-style only; do not build private personal dossiers or impersonate specific group members."
+    ],
+    "open_source_alignment": {
+      "letta_memgpt": "memory layering and consolidation inspiration",
+      "browser_use": "browser/feed operator inspiration; do not vendor code until license and integration boundary are reviewed",
+      "openhands": "tool separation and workspace/artifact loop inspiration",
+      "bettafish": "forum/persona dynamics inspiration only; GPL-2.0 code must not be copied into Mortis"
+    }
+  },
+  "artifact_first_workflow": {
+    "principle": "Real studio work ends in artifacts, not only QQ messages.",
+    "accepted_artifacts": [
+      "diff",
+      "commit",
+      "test report",
+      "bug report",
+      "design note",
+      "acceptance checklist",
+      "benchmark",
+      "research card",
+      "deployment or rollback note"
+    ],
+    "qq_summary_rule": "QQ should receive owner, artifact path/id, verification status, and remaining risk. Internal scratch discussion should stay in cognitive events or worker reports."
+  },
+  "qq_living_agents": {
+    "group_id": "474958794",
+    "group_name": "编程内参交流群",
+    "accounts_source": "docs/private-qq-napcat-accounts.json",
+    "current_mapping": {
+      "ceo": {
+        "qq_uin": "3974470627",
+        "onebot_url_from_backend": "http://napcat-qq1:3000"
+      },
+      "tester": {
+        "qq_uin": "3615811141",
+        "onebot_url_from_backend": "http://napcat-qq2:3000"
+      },
+      "builder": {
+        "qq_uin": "3316734532",
+        "onebot_url_from_backend": "http://napcat-qq3:3000"
+      },
+      "watcher": {
+        "qq_uin": "2264869713",
+        "onebot_url_from_backend": "http://napcat-qq4:3000"
+      }
+    },
+    "bot_user_ids_env": "3974470627,3316734532,3615811141,2264869713",
+    "napcat_host_diagnostic_ports": {
+      "ceo": "127.0.0.1:3600",
+      "tester": "127.0.0.1:3610",
+      "builder": "127.0.0.1:3620",
+      "watcher": "127.0.0.1:3630"
+    },
+    "webui_and_tokens_source": "docs/private-qq-napcat-accounts.json"
+  },
+  "openlist": {
+    "details_source": "docs/private-openlist-blog-storage.json",
+    "public_url": "https://blog.tengokukk.com/openlist/",
+    "internal_api_base_url_for_backend": "http://172.18.0.1:5244/openlist",
+    "real_netdisk_remote_dir": "/夸克网盘/Mortis-AI-Society",
+    "local_cache_host_dir": "/srv/multica/openlist-export",
+    "local_cache_container_dir": "/app/openlist-export",
+    "critical_rule": "OpenList netdisk means an OpenList storage path such as /夸克网盘/Mortis-AI-Society. /srv/myblog/public-data and /srv/multica/openlist-export are server directories or caches, not the durable netdisk."
+  },
+  "role_permissions": {
+    "ceo": {
+      "has": [
+        "read known address book",
+        "summarize QQ studio state",
+        "create shared threads",
+        "route tasks through Mortis role router",
+        "explain the QQ persona layer vs centralized Codex worker layer",
+        "report blocked work to QQ"
+      ],
+      "needs": [
+        "read-only dashboard for active invocations/actions",
+        "explicit approval policy view",
+        "ability to assign owner/next-step on shared threads from QQ"
+      ]
+    },
+    "builder": {
+      "has": [
+        "receive routed Builder actions",
+        "repo access through dispatcher source mount",
+        "agent workspaces under /srv/multica/agent-workspaces",
+        "Codex non-interactive execution through builder-local-codex runtime",
+        "local branch and commit creation inside worker workspace",
+        "test execution through approved dispatcher path",
+        "read known repo/backend/OpenList addresses"
+      ],
+      "needs": [
+        "clear branch/worktree allocation per task",
+        "commit/test result auto-sync back to QQ",
+        "structured acceptance criteria on every task",
+        "server Codex smoke-test re-run after each deployment or Codex/provider change",
+        "safe read access to backend logs and runtime config"
+      ]
+    },
+    "tester": {
+      "has": [
+        "participates in shared thread acceptance review",
+        "can verify OneBot group-list results by group_id",
+        "read known DB/table/backend addresses"
+      ],
+      "needs": [
+        "CI/test-environment integration and reliable Builder-branch handoff for Tester verification",
+        "test environment URL and command matrix",
+        "CI result URL or API access",
+        "read-only logs and monitoring",
+        "defect/issue write path",
+        "production read-only audited access policy"
+      ]
+    },
+    "watcher": {
+      "has": [
+        "OneBot get_group_list tool path through online NapCat accounts",
+        "OpenList export destination",
+        "read known docs/repo/OpenList/NapCat addresses"
+      ],
+      "needs": [
+        "external browser/search tool integration",
+        "Bilibili/GitHub/blog ingestion jobs",
+        "source credibility scoring",
+        "knowledge-card export to OpenList",
+        "issue/discussion entry point for research findings"
+      ]
+    }
+  },
+  "known_permission_gaps": [
+    {
+      "gap": "Per-agent SSH users are not provisioned.",
+      "impact": "QQ personas are not separate server users; real execution is centralized through Mortis dispatcher/Codex.",
+      "needed": "Create audited OS users only if the architecture intentionally moves from centralized dispatcher to per-agent shell execution."
+    },
+    {
+      "gap": "CI URL/API credentials are not configured in the address book.",
+      "impact": "Tester cannot truthfully claim live CI visibility from QQ.",
+      "needed": "Record CI provider URL, project, read token source, and test result API."
+    },
+    {
+      "gap": "Monitoring/log dashboard URL is not configured.",
+      "impact": "Builder/Tester can ask for logs but do not have a stable dashboard address to cite.",
+      "needed": "Add log source, retention, read-only access path, and redaction rules."
+    },
+    {
+      "gap": "Issue tracker URL/write permissions are not configured.",
+      "impact": "Defects and research findings cannot be filed as durable issues unless routed through existing Mortis tasks.",
+      "needed": "Record GitHub/Gitea/Jira/other issue endpoint and role write policy."
+    },
+    {
+      "gap": "Tester execution station is MVP-only.",
+      "impact": "Tester can claim approved Tester actions, run contract commands, and write verification-report artifacts, but cannot yet reliably receive Builder branch metadata or read CI/staging state.",
+      "needed": "Connect Builder completion to Tester actions with branch/commit/test matrix, then add CI and staging environment readers."
+    },
+    {
+      "gap": "Watcher external browsing/Bilibili ingestion is not fully implemented.",
+      "impact": "Watcher can talk about research and use current QQ/OneBot tools, but scheduled external learning is still an extension point.",
+      "needed": "Implement browser/search/Bilibili ingestion jobs and write outputs to knowledge store/OpenList."
+    },
+    {
+      "gap": "Internal Builder/Tester deliberation is deterministic MVP, not full LLM private debate.",
+      "impact": "The Conversation OS exists, but deeper private agent discussion still needs provider-backed generation.",
+      "needed": "Generate CognitiveEvent content through the LLM provider and update ConsensusState from private replies."
+    }
+  ],
+  "group_chat_pain_points_observed": [
+    "Agents ask for repo, DB, logs, and server addresses that are already known in deployment env/docs.",
+    "Agents talk like project managers when they should route real work into the Dispatcher/Codex worker chain.",
+    "Builder needs repo/branch/worktree ownership and automatic commit/test result sync.",
+    "Tester needs CI, test environment, log/monitoring read-only access, and a defect write path.",
+    "Watcher needs external research tools and a durable knowledge-card pipeline.",
+    "The group needs visible handoff plus private cognitive bus: QQ should show owner/result, not every internal thought."
+  ],
+  "agent_prompt_facts": [
+    "Known backend health URL on host: http://127.0.0.1:8088/health.",
+    "Known production root/repo: /srv/multica.",
+    "Known DB: PostgreSQL database multica on host 127.0.0.1:55432, credentials from /srv/multica/.env only.",
+    "Known OpenList netdisk destination: /夸克网盘/Mortis-AI-Society through backend-reachable http://172.18.0.1:5244/openlist; host diagnostics may use http://127.0.0.1:5244/openlist.",
+    "Known QQ group: 474958794 编程内参交流群.",
+    "QQ accounts are persona ingress/egress; real code execution is centralized through role_actions, Dispatcher, Builder runtime, and Codex worker.",
+    "Known Builder worker path: /srv/multica/agent-workspaces/action-<id>/repo with branch mortis/action-<id>.",
+    "Server Codex smoke test passed on 2026-05-06T13:40:50+08:00 in multica-backend-1 with codex-cli 0.128.0 and a real .mortis-smoke.txt git diff.",
+    "Known missing pieces: CI URL, test environment, monitoring/log dashboard, issue tracker, per-agent SSH users, full Watcher browser/Bilibili ingestion, full LLM private deliberation."
+  ],
+  "anti_mistake_rules": [
+    "Do not ask in QQ for known addresses; read this JSON first.",
+    "Do not claim a permission exists if it is listed as a gap.",
+    "Do not print tokens, passwords, API keys, or inbound secrets in QQ or normal reports.",
+    "Do not call server directories a netdisk; durable netdisk writes go through OpenList API to /夸克网盘/Mortis-AI-Society.",
+    "Do not present QQ accounts as separate server accounts; they are public personas routed into the same Mortis backend execution chain.",
+    "Do not say Builder is working unless an action was actually created/approved/claimed or the blocked reason is reported.",
+    "Do not say Tester verified code unless a real command, CI result, or explicit evidence exists.",
+    "Do not keep hand-rolling AI OS infrastructure when a mature system can be adapted behind Mortis contracts.",
+    "Do not claim LangGraph, Letta, OpenHands, Browser Use, NATS, Neo4j, or the observability stack is integrated until studio_state and deployment evidence say so."
+  ],
+  "framework_alignment": {
+    "principle": "Do not invent a complete AI OS from scratch. Mortis should evolve into AI Native Infrastructure by adapting mature systems behind stable Go/SQL contracts while keeping the current private deployment and Codex execution path stable.",
+    "adoption_state_source": "studio_state rows from migration 058_ai_infrastructure_adoption",
+    "priority_order": [
+      "P0-1 Letta/MemGPT long-term memory service and MemoryAdapter",
+      "P0-2 browser-use Watcher/web/Bilibili/GitHub/blog browsing worker",
+      "P1 Grafana/Loki/Prometheus/Sentry read-only observability readers",
+      "P1 OpenHands experimental worker runtime smoke tests",
+      "Later LangGraph runtime graph/shared state/checkpoint/recovery/internal bus adapter",
+      "P2 NATS or Redis Streams internal event bus",
+      "P2 Neo4j graph mirror after SQL edge contracts stabilize"
+    ],
+    "recommended_service_roots": {
+      "letta": "/srv/ai-infra/letta",
+      "browser_use": "/srv/ai-infra/browser-use"
+    },
+    "hard_boundary": [
+      "Do not expand QQ reply logic, cooldown, interest scoring, custom graph state, custom browser worker, or custom shell worker as the main strategy.",
+      "The Go backend remains the adapter kernel and private deployment truth.",
+      "SQL remains canonical until an external system is actually connected and verified.",
+      "Every external system must consume/produce stable Mortis contracts such as role_actions, role_invocations, studio_artifacts, studio_state, and agent memory tables."
+    ],
+    "runtime_kernel": {
+      "target_reference": "LangGraph",
+      "priority": "later",
+      "studio_state_key": "ai_infra_langgraph",
+      "official_docs": "https://docs.langchain.com/oss/python/langgraph/persistence",
+      "what_to_borrow": [
+        "graph-shaped state machine",
+        "checkpoint/resume semantics",
+        "durable shared state",
+        "human-in-loop pauses",
+        "tool step idempotency"
+      ],
+      "mortis_current": "SharedThread, CognitiveEvent, studio_state, role_actions, and role_invocations are the current Go MVP equivalents.",
+      "adoption_boundary": "Do not rewrite the backend immediately. Defer graph-kernel migration until Letta memory, browser-use Watcher, and CI/log readers are working. For now only make Mortis state/event contracts LangGraph-compatible: thread id, state snapshot, current node, next node, blocked reason, artifact ids, and resumable steps."
+    },
+    "long_term_memory": {
+      "target_reference": "Letta / MemGPT",
+      "priority": "P0-1",
+      "studio_state_key": "ai_infra_letta_memory",
+      "official_docs": "https://docs.letta.com/concepts/memory-management",
+      "what_to_borrow": [
+        "context is not memory",
+        "working memory vs archival memory",
+        "memory consolidation",
+        "persona persistence",
+        "retrieval before reply"
+      ],
+      "mortis_current": "agent_journals, agent_memories, agent_memory_items, agent_knowledge_items, agent_relationships, agent_emotions, and social observations are already persisted.",
+      "repo": "https://github.com/letta-ai/letta",
+      "license": "Apache-2.0",
+      "intended_service_root": "/srv/ai-infra/letta",
+      "adapter_name": "MemoryAdapter",
+      "first_mapping": {
+        "ceo": "Letta agent for planning, decisions, operator preferences, and studio state",
+        "builder": "Letta agent for engineering decisions, bugs, codebase memories, and implementation patterns",
+        "tester": "Letta agent for failures, acceptance criteria, risk patterns, and regression memory",
+        "watcher": "Letta agent for sources, topics, group culture, and research memory"
+      },
+      "adoption_boundary": "Build MemoryAdapter before adding more prompt memory rules: retrieve before QQ reply/action decision, write after key event, and consolidate identity/social/episodic/project memory."
+    },
+    "worker_runtime": {
+      "target_reference": "OpenHands",
+      "priority": "P1 experimental",
+      "studio_state_key": "ai_infra_openhands_worker",
+      "official_docs": "https://docs.openhands.dev/sdk/index",
+      "what_to_borrow": [
+        "mature worker runtime",
+        "shell/browser/file/repo action loop",
+        "planning and tool execution boundaries",
+        "execution traceability"
+      ],
+      "mortis_current": "builder-local-codex and tester-local-verifier are proven minimal workers behind role_actions.",
+      "adoption_boundary": "Create an OpenHands adapter that consumes approved role_actions and emits the same execution_report/studio_artifacts format before replacing any current worker path."
+    },
+    "browser_embodiment": {
+      "target_reference": "browser-use",
+      "priority": "P0-2",
+      "studio_state_key": "ai_infra_browser_use",
+      "official_docs": "https://docs.browser-use.com",
+      "repo": "https://github.com/browser-use/browser-use",
+      "license": "MIT",
+      "intended_service_root": "/srv/ai-infra/browser-use",
+      "adapter_name": "BrowserUseAdapter",
+      "what_to_borrow": [
+        "web browsing",
+        "search/click/extract flows",
+        "login-capable workflows",
+        "Watcher external ingestion"
+      ],
+      "mortis_current": "Watcher has QQ/feed/knowledge tables but no productized Bilibili/GitHub/blog browser ingestion.",
+      "adoption_boundary": "Use browser-use as a constrained Watcher research worker before writing a general Playwright/browser agent. Browser content is untrusted input; first adapter is read-first and requires confirmation for sensitive actions."
+    },
+    "observability_stack": {
+      "target_reference": "Grafana/Loki/Prometheus/Sentry",
+      "priority": "P1",
+      "studio_state_key": "ai_infra_observability_stack",
+      "what_to_borrow": [
+        "logs",
+        "metrics",
+        "errors",
+        "alerts",
+        "read-only AI evidence queries"
+      ],
+      "mortis_current": "verification_evidence has CI/staging/observability fields; logs are still operator-only unless a reader is configured.",
+      "adoption_boundary": "Fill missing evidence fields with read-only observability readers and redaction, not custom log storage."
+    },
+    "internal_event_bus": {
+      "target_reference": "NATS or Redis Streams",
+      "priority": "P2",
+      "studio_state_key": "ai_infra_internal_bus",
+      "what_to_borrow": [
+        "internal events",
+        "durable streams",
+        "handoff notifications",
+        "fanout without QQ spam"
+      ],
+      "mortis_current": "agent_cognitive_events and role_invocations are SQL-backed event records; QQ remains public face.",
+      "adoption_boundary": "Mirror existing DB events first. Do not move public QQ behavior onto a private bus."
+    },
+    "graph_database": {
+      "target_reference": "Neo4j",
+      "priority": "P2",
+      "studio_state_key": "ai_infra_graph_database",
+      "what_to_borrow": [
+        "artifact graph",
+        "social graph",
+        "memory graph",
+        "root-cause relationship queries"
+      ],
+      "mortis_current": "studio_artifacts, role_actions, role_invocations, relationships, and knowledge items are SQL canonical.",
+      "adoption_boundary": "Design an SQL-to-graph mirror only after edge contracts are stable; do not replace SQL prematurely."
+    },
+    "persona_team": {
+      "target_reference": "CrewAI",
+      "official_docs": "https://docs.crewai.com/concepts/crews",
+      "what_to_borrow": [
+        "role/goal/backstory/task contracts",
+        "team-level handoffs",
+        "clear per-role tool ownership"
+      ],
+      "mortis_current": "CEO/Builder/Tester/Watcher personas, capabilities, handoff workflows, and role permissions exist.",
+      "adoption_boundary": "Borrow persona/task structure, but keep long-running state in Mortis/LangGraph-compatible kernel. Crew-style roles should not own production state directly."
+    },
+    "internal_agent_conversation": {
+      "target_reference": "AutoGen",
+      "official_docs": "https://microsoft.github.io/autogen/0.2/docs/Use-Cases/agent_chat",
+      "what_to_borrow": [
+        "agent-to-agent message dynamics",
+        "speaker selection patterns",
+        "private deliberation turns",
+        "termination/closure signals"
+      ],
+      "mortis_current": "Private CognitiveEvent bus exists; MVP Builder/Tester internal events are deterministic and are not mirrored into QQ.",
+      "adoption_boundary": "Upgrade private Builder/Tester/Watcher turns to real LLM-generated events while preserving public QQ as the face, not the work bus."
+    },
+    "software_execution_legacy_note": {
+      "target_reference": "OpenHands plus Codex runtime",
+      "official_docs": "https://docs.openhands.dev/sdk/index",
+      "what_to_borrow": [
+        "workspace boundaries",
+        "shell/browser/tool separation",
+        "artifact-oriented software engineering loop",
+        "execution traceability"
+      ],
+      "mortis_current": "Codex/dispatcher executes repository tasks through builder-local-codex and tester-local-verifier.",
+      "adoption_boundary": "Keep Codex as the execution engine; borrow workspace/tool/artifact boundaries. Do not make GLM social agents write code directly."
+    }
+  }
+}

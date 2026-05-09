@@ -21,14 +21,12 @@ import { BatchActionToolbar } from "../../issues/components/batch-action-toolbar
 import { useClearFiltersOnWorkspaceChange } from "@multica/core/issues/stores/view-store";
 import { useWorkspaceId } from "@multica/core/hooks";
 import { myIssueListOptions, childIssueProgressOptions, type MyIssuesFilter } from "@multica/core/issues/queries";
-import { useUpdateIssue } from "@multica/core/issues/mutations";
+import { useUpdateIssue, useLoadMoreDoneIssues } from "@multica/core/issues/mutations";
 import { myIssuesViewStore } from "@multica/core/issues/stores/my-issues-view-store";
 import { PageHeader } from "../../layout/page-header";
-import { useT } from "../../i18n";
 import { MyIssuesHeader } from "./my-issues-header";
 
 export function MyIssuesPage() {
-  const { t } = useT("my-issues");
   const user = useAuthStore((s) => s.user);
   const workspace = useCurrentWorkspace();
   const wsId = useWorkspaceId();
@@ -73,6 +71,8 @@ export function MyIssuesPage() {
     myIssueListOptions(wsId, scope, filter),
   );
 
+  const { doneTotal } = useLoadMoreDoneIssues({ scope, filter });
+
   // Apply status/priority filters from view store
   const issues = useMemo(
     () =>
@@ -84,7 +84,6 @@ export function MyIssuesPage() {
         creatorFilters: [],
         projectFilters: [],
         includeNoProject: false,
-        labelFilters: [],
       }),
     [myIssues, statusFilters, priorityFilters],
   );
@@ -104,6 +103,12 @@ export function MyIssuesPage() {
   const updateIssueMutation = useUpdateIssue();
   const handleMoveIssue = useCallback(
     (issueId: string, newStatus: IssueStatus, newPosition?: number) => {
+      const viewState = myIssuesViewStore.getState();
+      if (viewState.sortBy !== "position") {
+        viewState.setSortBy("position");
+        viewState.setSortDirection("asc");
+      }
+
       const updates: Partial<{ status: IssueStatus; position: number }> = {
         status: newStatus,
       };
@@ -111,10 +116,10 @@ export function MyIssuesPage() {
 
       updateIssueMutation.mutate(
         { id: issueId, ...updates },
-        { onError: () => toast.error(t(($) => $.errors.move_failed)) },
+        { onError: () => toast.error("移动事项失败") },
       );
     },
-    [updateIssueMutation, t],
+    [updateIssueMutation],
   );
 
   if (loading) {
@@ -163,10 +168,10 @@ export function MyIssuesPage() {
       <PageHeader className="gap-1.5">
         <WorkspaceAvatar name={workspace?.name ?? "W"} size="sm" />
         <span className="text-sm text-muted-foreground">
-          {workspace?.name ?? t(($) => $.page.workspace_fallback)}
+          {workspace?.name ?? "工作区"}
         </span>
         <ChevronRight className="h-3 w-3 text-muted-foreground" />
-        <span className="text-sm font-medium">{t(($) => $.page.breadcrumb)}</span>
+        <span className="text-sm font-medium">我的事项</span>
       </PageHeader>
 
       {/* Header: scope tabs (left) + controls (right) */}
@@ -177,18 +182,20 @@ export function MyIssuesPage() {
         {myIssues.length === 0 ? (
           <div className="flex flex-1 min-h-0 flex-col items-center justify-center gap-2 text-muted-foreground">
             <ListTodo className="h-10 w-10 text-muted-foreground/40" />
-            <p className="text-sm">{t(($) => $.page.empty_title)}</p>
-            <p className="text-xs">{t(($) => $.page.empty_description)}</p>
+            <p className="text-sm">暂无分配给你的事项</p>
+            <p className="text-xs">你创建或分配给你的事项会显示在这里。</p>
           </div>
         ) : (
           <div className="flex flex-col flex-1 min-h-0">
             {viewMode === "board" ? (
               <BoardView
                 issues={issues}
+                allIssues={myIssues}
                 visibleStatuses={visibleStatuses}
                 hiddenStatuses={hiddenStatuses}
                 onMoveIssue={handleMoveIssue}
                 childProgressMap={childProgressMap}
+                doneTotal={doneTotal}
                 myIssuesScope={scope}
                 myIssuesFilter={filter}
               />
@@ -197,6 +204,7 @@ export function MyIssuesPage() {
                 issues={issues}
                 visibleStatuses={visibleStatuses}
                 childProgressMap={childProgressMap}
+                doneTotal={doneTotal}
                 myIssuesScope={scope}
                 myIssuesFilter={filter}
               />

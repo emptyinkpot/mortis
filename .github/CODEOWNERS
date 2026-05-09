@@ -1,0 +1,12 @@
+# Mortis repository ownership
+# Keep source-root, workflow, contracts, and runtime architecture changes reviewable.
+
+* @emptyinkpot
+
+/AGENT_WORKFLOW.md @emptyinkpot
+/AI_CONTEXT.md @emptyinkpot
+/contracts/ @emptyinkpot
+/scripts/check-repository-policy.sh @emptyinkpot
+/.github/ @emptyinkpot
+/docs/architecture/ @emptyinkpot
+/docs/operations/current-runtime-map.md @emptyinkpot

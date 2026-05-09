@@ -2,9 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Download } from "lucide-react";
 import { useAuthStore } from "@multica/core/auth";
-import { captureDownloadIntent } from "@multica/core/analytics";
 import { useLocale } from "../i18n";
 import {
   ClaudeCodeLogo,
@@ -12,6 +10,7 @@ import {
   GeminiCliLogo,
   OpenClawLogo,
   OpenCodeLogo,
+  githubUrl,
   heroButtonClassName,
 } from "./shared";
 
@@ -44,11 +43,25 @@ export function LandingHero() {
                 {user ? t.header.dashboard : t.hero.cta}
               </Link>
               <Link
-                href="/download"
+                href={githubUrl}
+                target="_blank"
+                rel="noreferrer"
                 className={heroButtonClassName("ghost")}
-                onClick={() => captureDownloadIntent("landing_hero")}
               >
-                <Download className="size-4" aria-hidden />
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="size-4"
+                  aria-hidden="true"
+                >
+                  <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                  <line x1="8" y1="21" x2="16" y2="21" />
+                  <line x1="12" y1="17" x2="12" y2="21" />
+                </svg>
                 {t.hero.downloadDesktop}
               </Link>
             </div>

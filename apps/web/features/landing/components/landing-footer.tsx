@@ -4,9 +4,10 @@ import Link from "next/link";
 import { MulticaIcon } from "@multica/ui/components/common/multica-icon";
 import { cn } from "@multica/ui/lib/utils";
 import { useAuthStore } from "@multica/core/auth";
-import { captureDownloadIntent } from "@multica/core/analytics";
 import { XMark, GitHubMark, githubUrl, twitterUrl } from "./shared";
 import { useLocale, locales, localeLabels } from "../i18n";
+
+const singleUserMode = Boolean(process.env.NEXT_PUBLIC_AUTO_LOGIN_WORKSPACE_SLUG);
 
 export function LandingFooter() {
   const { t, locale, setLocale } = useLocale();
@@ -22,8 +23,8 @@ export function LandingFooter() {
           <div className="lg:w-[340px] lg:shrink-0">
             <Link href="#product" className="flex items-center gap-3">
               <MulticaIcon className="size-5 text-white" noSpin />
-              <span className="text-[18px] font-semibold tracking-[0.04em] lowercase">
-                multica
+              <span className="text-[18px] font-semibold tracking-[0.04em]">
+                Mortis
               </span>
             </Link>
             <p className="mt-4 max-w-[300px] text-[14px] leading-[1.7] text-white/50 sm:text-[15px]">
@@ -52,7 +53,7 @@ export function LandingFooter() {
                 href={user ? "/" : "/login"}
                 className="inline-flex items-center justify-center rounded-[11px] bg-white px-5 py-2.5 text-[13px] font-semibold text-[#0a0d12] transition-colors hover:bg-white/88"
               >
-                {user ? t.header.dashboard : t.footer.cta}
+                {singleUserMode ? "进入 Mortis" : user ? t.header.dashboard : t.footer.cta}
               </Link>
             </div>
           </div>
@@ -72,11 +73,6 @@ export function LandingFooter() {
                         {...(link.href.startsWith("http")
                           ? { target: "_blank", rel: "noreferrer" }
                           : {})}
-                        onClick={
-                          link.href === "/download"
-                            ? () => captureDownloadIntent("landing_footer")
-                            : undefined
-                        }
                         className="text-[14px] text-white/50 transition-colors hover:text-white"
                       >
                         {link.label}
@@ -123,8 +119,8 @@ export function LandingFooter() {
               className="size-[clamp(4rem,12vw,10rem)] shrink-0 text-white"
               noSpin
             />
-            <span className="font-[family-name:var(--font-serif)] text-[clamp(6rem,22vw,16rem)] font-normal leading-[0.82] tracking-[-0.04em] text-white lowercase">
-              multica
+            <span className="font-[family-name:var(--font-serif)] text-[clamp(6rem,22vw,16rem)] font-normal leading-[0.82] tracking-[-0.04em] text-white">
+              Mortis
             </span>
           </div>
         </div>

@@ -1,7 +1,8 @@
 # --- Build stage ---
 FROM golang:1.26-alpine AS builder
 
-RUN apk add --no-cache git
+ENV GOPROXY=https://goproxy.cn,direct
+ENV GOSUMDB=sum.golang.google.cn
 
 WORKDIR /src
 
@@ -15,14 +16,18 @@ COPY server/ ./server/
 # Build binaries
 ARG VERSION=dev
 ARG COMMIT=unknown
-RUN cd server && CGO_ENABLED=0 go build -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" -o bin/server ./cmd/server
+RUN cd server && CGO_ENABLED=0 go build -ldflags "-s -w" -o bin/server ./cmd/server
 RUN cd server && CGO_ENABLED=0 go build -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" -o bin/multica ./cmd/multica
 RUN cd server && CGO_ENABLED=0 go build -ldflags "-s -w" -o bin/migrate ./cmd/migrate
 
 # --- Runtime stage ---
-FROM alpine:3.21
+FROM node:22-alpine
 
-RUN apk add --no-cache ca-certificates tzdata
+RUN sed -i "s/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g" /etc/apk/repositories
+
+RUN apk add --no-cache bash ca-certificates docker-cli git openssh-client tzdata \
+    && npm install -g @openai/codex@0.128.0 \
+    && npm cache clean --force
 
 WORKDIR /app
 

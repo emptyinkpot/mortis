@@ -1,4 +1,16 @@
+---
+title: Multica Design System
+status: design-system
+audience: designers and frontend contributors
+scope: reusable visual and interaction rules
+---
+
 # Multica Design System
+
+> Scope note: this file defines reusable design-system and interaction guidance.
+> It is not a current-state runtime or deployment document.
+> Remaining `Multica` naming here primarily refers to design-system lineage and
+> shared UI language, not to the current Mortis private deployment truth.
 
 本文档定义 Multica 的视觉语言和交互规范。所有 UI 开发以此为准。
 

@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useCallback, useRef, useEffect } from "react";
 import { useDefaultLayout, usePanelRef } from "react-resizable-panels";
-import { Check, ChevronRight, Link2, ListTodo, MoreHorizontal, PanelRight, Pin, PinOff, Plus, Trash2, UserMinus } from "lucide-react";
+import { Check, ChevronRight, Link2, ListTodo, MoreHorizontal, PanelRight, Pin, PinOff, Trash2, UserMinus } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@multica/ui/lib/utils";
 import { toast } from "sonner";
@@ -12,14 +12,13 @@ import { projectDetailOptions } from "@multica/core/projects/queries";
 import { useUpdateProject, useDeleteProject } from "@multica/core/projects/mutations";
 import { pinListOptions } from "@multica/core/pins";
 import { useCreatePin, useDeletePin } from "@multica/core/pins";
-import { myIssueListOptions, childIssueProgressOptions, type MyIssuesFilter } from "@multica/core/issues/queries";
+import { issueListOptions, childIssueProgressOptions } from "@multica/core/issues/queries";
 import { useUpdateIssue } from "@multica/core/issues/mutations";
-import { useModalStore } from "@multica/core/modals";
 import { memberListOptions, agentListOptions } from "@multica/core/workspace/queries";
 import { useWorkspaceId } from "@multica/core/hooks";
 import { useCurrentWorkspace, useWorkspacePaths } from "@multica/core/paths";
 import { useActorName } from "@multica/core/workspace/hooks";
-import { PROJECT_STATUS_ORDER, PROJECT_STATUS_CONFIG, PROJECT_PRIORITY_ORDER } from "@multica/core/projects/config";
+import { PROJECT_STATUS_ORDER, PROJECT_STATUS_CONFIG, PROJECT_PRIORITY_ORDER, PROJECT_PRIORITY_CONFIG } from "@multica/core/projects/config";
 import { BOARD_STATUSES } from "@multica/core/issues/config";
 import { createIssueViewStore } from "@multica/core/issues/stores/view-store";
 import { ViewStoreProvider, useViewStore } from "@multica/core/issues/stores/view-store-context";
@@ -29,7 +28,6 @@ import { ActorAvatar } from "../../common/actor-avatar";
 import { AppLink, useNavigation } from "../../navigation";
 import { TitleEditor, ContentEditor, type ContentEditorRef } from "../../editor";
 import { PriorityIcon } from "../../issues/components/priority-icon";
-import { ProjectResourcesSection } from "./project-resources-section";
 import { IssuesHeader } from "../../issues/components/issues-header";
 import { BoardView } from "../../issues/components/board-view";
 import { ListView } from "../../issues/components/list-view";
@@ -58,6 +56,7 @@ import {
 } from "@multica/ui/components/ui/tooltip";
 import { EmojiPicker } from "@multica/ui/components/common/emoji-picker";
 import { PageHeader } from "../../layout/page-header";
+import { ProjectCollaborationPanel } from "./project-collaboration-panel";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -68,8 +67,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@multica/ui/components/ui/alert-dialog";
-import { useT } from "../../i18n";
-import { useProjectStatusLabels, useProjectPriorityLabels } from "./labels";
 
 // ---------------------------------------------------------------------------
 // Property row — sidebar property display
@@ -98,18 +95,7 @@ function PropRow({
 
 const projectViewStore = createIssueViewStore("project_issues_view");
 
-function ProjectIssuesContent({
-  projectId,
-  projectIssues,
-  scope,
-  filter,
-}: {
-  projectId: string;
-  projectIssues: Issue[];
-  scope: string;
-  filter: MyIssuesFilter;
-}) {
-  const { t } = useT("projects");
+function ProjectIssuesContent({ projectIssues }: { projectIssues: Issue[] }) {
   const wsId = useWorkspaceId();
   const viewMode = useViewStore((s) => s.viewMode);
   const statusFilters = useViewStore((s) => s.statusFilters);
@@ -117,11 +103,14 @@ function ProjectIssuesContent({
   const assigneeFilters = useViewStore((s) => s.assigneeFilters);
   const includeNoAssignee = useViewStore((s) => s.includeNoAssignee);
   const creatorFilters = useViewStore((s) => s.creatorFilters);
-  const labelFilters = useViewStore((s) => s.labelFilters);
 
   const issues = useMemo(
-    () => filterIssues(projectIssues, { statusFilters, priorityFilters, assigneeFilters, includeNoAssignee, creatorFilters, projectFilters: [], includeNoProject: false, labelFilters }),
-    [projectIssues, statusFilters, priorityFilters, assigneeFilters, includeNoAssignee, creatorFilters, labelFilters],
+    () => filterIssues(projectIssues, { statusFilters, priorityFilters, assigneeFilters, includeNoAssignee, creatorFilters, projectFilters: [], includeNoProject: false }),
+    [projectIssues, statusFilters, priorityFilters, assigneeFilters, includeNoAssignee, creatorFilters],
+  );
+  const doneColumnCount = useMemo(
+    () => projectIssues.filter((issue) => issue.status === "done").length,
+    [projectIssues],
   );
 
   const { data: childProgressMap = new Map() } = useQuery(childIssueProgressOptions(wsId));
@@ -140,33 +129,27 @@ function ProjectIssuesContent({
   const updateIssueMutation = useUpdateIssue();
   const handleMoveIssue = useCallback(
     (issueId: string, newStatus: IssueStatus, newPosition?: number) => {
+      const viewState = projectViewStore.getState();
+      if (viewState.sortBy !== "position") {
+        viewState.setSortBy("position");
+        viewState.setSortDirection("asc");
+      }
       const updates: Partial<{ status: IssueStatus; position: number }> = { status: newStatus };
       if (newPosition !== undefined) updates.position = newPosition;
       updateIssueMutation.mutate(
         { id: issueId, ...updates },
-        { onError: () => toast.error(t(($) => $.detail.toast_move_issue_failed)) },
+        { onError: () => toast.error("移动事项失败") },
       );
     },
-    [updateIssueMutation, t],
+    [updateIssueMutation],
   );
 
   if (projectIssues.length === 0) {
     return (
-      <div className="flex flex-1 min-h-0 flex-col items-center justify-center gap-3 text-muted-foreground">
+      <div className="flex flex-1 min-h-0 flex-col items-center justify-center gap-2 text-muted-foreground">
         <ListTodo className="h-10 w-10 text-muted-foreground/40" />
-        <p className="text-sm">{t(($) => $.detail.empty_issues_title)}</p>
-        <p className="text-xs">{t(($) => $.detail.empty_issues_hint)}</p>
-        <Button
-          variant="outline"
-          size="sm"
-          className="mt-1"
-          onClick={() =>
-            useModalStore.getState().open("create-issue", { project_id: projectId })
-          }
-        >
-          <Plus className="size-3.5 mr-1.5" />
-          {t(($) => $.detail.empty_issues_new_button)}
-        </Button>
+        <p className="text-sm">暂无关联事项</p>
+        <p className="text-xs">可在事项详情页把事项关联到这个项目。</p>
       </div>
     );
   }
@@ -176,22 +159,19 @@ function ProjectIssuesContent({
       {viewMode === "board" ? (
         <BoardView
           issues={issues}
+          allIssues={projectIssues}
           visibleStatuses={visibleStatuses}
           hiddenStatuses={hiddenStatuses}
           onMoveIssue={handleMoveIssue}
           childProgressMap={childProgressMap}
-          myIssuesScope={scope}
-          myIssuesFilter={filter}
-          projectId={projectId}
+          doneTotal={doneColumnCount}
         />
       ) : (
         <ListView
           issues={issues}
           visibleStatuses={visibleStatuses}
           childProgressMap={childProgressMap}
-          myIssuesScope={scope}
-          myIssuesFilter={filter}
-          projectId={projectId}
+          doneTotal={doneColumnCount}
         />
       )}
     </div>
@@ -203,9 +183,6 @@ function ProjectIssuesContent({
 // ---------------------------------------------------------------------------
 
 export function ProjectDetail({ projectId }: { projectId: string }) {
-  const { t } = useT("projects");
-  const statusLabels = useProjectStatusLabels();
-  const priorityLabels = useProjectPriorityLabels();
   const wsId = useWorkspaceId();
   const wsPaths = useWorkspacePaths();
   const router = useNavigation();
@@ -213,14 +190,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
   const workspace = useCurrentWorkspace();
   const workspaceName = workspace?.name;
   const { data: project, isLoading } = useQuery(projectDetailOptions(wsId, projectId));
-  const projectScope = `project:${projectId}`;
-  const projectFilter = useMemo<MyIssuesFilter>(
-    () => ({ project_id: projectId }),
-    [projectId],
-  );
-  const { data: projectIssues = [] } = useQuery(
-    myIssueListOptions(wsId, projectScope, projectFilter),
-  );
+  const { data: allIssues = [] } = useQuery(issueListOptions(wsId));
   const { data: members = [] } = useQuery(memberListOptions(wsId));
   const { data: agents = [] } = useQuery(agentListOptions(wsId));
   const { getActorName } = useActorName();
@@ -246,17 +216,12 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
     id: "multica_project_detail_layout",
   });
   const sidebarRef = usePanelRef();
-  // Desktop and mobile sidebar state must be separate. A single state defaulting
-  // to `true` made the mobile <Sheet> mount in the open position on first render
-  // (after `useIsMobile()` flipped from false→true), briefly covering the page
-  // with its modal backdrop and locking scroll — leaving the page unresponsive.
-  const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const sidebarOpen = isMobile ? mobileSidebarOpen : desktopSidebarOpen;
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   useEffect(() => {
     if (isMobile) {
-      setMobileSidebarOpen(false);
+      setSidebarOpen(false);
+      sidebarRef.current?.collapse();
     }
   }, [isMobile]);
 
@@ -266,6 +231,11 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
   const leadQuery = leadFilter.toLowerCase();
   const filteredMembers = members.filter((m) => m.name.toLowerCase().includes(leadQuery));
   const filteredAgents = agents.filter((a) => !a.archived_at && a.name.toLowerCase().includes(leadQuery));
+
+  const projectIssues = useMemo(
+    () => allIssues.filter((i) => i.project_id === projectId),
+    [allIssues, projectId],
+  );
 
   const handleUpdateField = useCallback(
     (data: Parameters<typeof updateProject.mutate>[0] extends { id: string } & infer R ? R : never) => {
@@ -279,11 +249,11 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
     if (!project) return;
     deleteProject.mutate(project.id, {
       onSuccess: () => {
-        toast.success(t(($) => $.detail.toast_project_deleted));
+        toast.success("项目已删除");
         router.push(wsPaths.projects());
       },
     });
-  }, [project, deleteProject, router, wsPaths, t]);
+  }, [project, deleteProject, router, wsPaths]);
 
   if (isLoading) {
     return (
@@ -297,11 +267,12 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
   }
 
   if (!project) {
-    return <div className="flex items-center justify-center h-full text-muted-foreground">{t(($) => $.detail.not_found)}</div>;
+    return <div className="flex items-center justify-center h-full text-muted-foreground">未找到项目</div>;
   }
 
-  const issueMetrics = getProjectIssueMetrics(project);
+  const issueMetrics = getProjectIssueMetrics(project, projectIssues);
   const statusCfg = PROJECT_STATUS_CONFIG[project.status];
+  const priorityCfg = PROJECT_PRIORITY_CONFIG[project.priority];
 
   const sidebarContent = (
     <div className="space-y-5">
@@ -313,7 +284,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
               <button
                 type="button"
                 className="text-2xl cursor-pointer rounded-lg p-1 -ml-1 hover:bg-accent/60 transition-colors"
-                title={t(($) => $.detail.icon_tooltip)}
+                title="更换图标"
               >
                 {project.icon || "📁"}
               </button>
@@ -331,7 +302,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
         <TitleEditor
           key={`title-${projectId}`}
           defaultValue={project.title}
-          placeholder={t(($) => $.detail.title_placeholder)}
+          placeholder="项目标题"
           className="mt-2 w-full text-base font-semibold leading-snug tracking-tight"
           onBlur={(value) => {
             const trimmed = value.trim();
@@ -346,17 +317,17 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
           className={`flex w-full items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors mb-2 hover:bg-accent/70 ${propertiesOpen ? "" : "text-muted-foreground hover:text-foreground"}`}
           onClick={() => setPropertiesOpen(!propertiesOpen)}
         >
-          {t(($) => $.detail.section_properties)}
+          属性
           <ChevronRight className={`!size-3 shrink-0 stroke-[2.5] text-muted-foreground transition-transform ${propertiesOpen ? "rotate-90" : ""}`} />
         </button>
         {propertiesOpen && <div className="space-y-0.5 pl-2">
-          <PropRow label={t(($) => $.table.status)}>
+          <PropRow label="状态">
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={
                   <button type="button" className="inline-flex items-center gap-1.5 text-xs hover:text-foreground transition-colors">
                     <span className={cn("size-2 rounded-full", statusCfg.dotColor)} />
-                    <span>{statusLabels[project.status]}</span>
+                    <span>{statusCfg.label}</span>
                   </button>
                 }
               />
@@ -364,20 +335,20 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
                 {PROJECT_STATUS_ORDER.map((s) => (
                   <DropdownMenuItem key={s} onClick={() => handleUpdateField({ status: s as ProjectStatus })}>
                     <span className={cn("size-2 rounded-full", PROJECT_STATUS_CONFIG[s].dotColor)} />
-                    <span>{statusLabels[s]}</span>
+                    <span>{PROJECT_STATUS_CONFIG[s].label}</span>
                     {s === project.status && <Check className="ml-auto h-3.5 w-3.5" />}
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
           </PropRow>
-          <PropRow label={t(($) => $.table.priority)}>
+          <PropRow label="优先级">
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={
                   <button type="button" className="inline-flex items-center gap-1.5 text-xs hover:text-foreground transition-colors">
                     <PriorityIcon priority={project.priority} />
-                    <span>{priorityLabels[project.priority]}</span>
+                    <span>{priorityCfg.label}</span>
                   </button>
                 }
               />
@@ -385,25 +356,25 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
                 {PROJECT_PRIORITY_ORDER.map((p) => (
                   <DropdownMenuItem key={p} onClick={() => handleUpdateField({ priority: p as ProjectPriority })}>
                     <PriorityIcon priority={p} />
-                    <span>{priorityLabels[p]}</span>
+                    <span>{PROJECT_PRIORITY_CONFIG[p].label}</span>
                     {p === project.priority && <Check className="ml-auto h-3.5 w-3.5" />}
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
           </PropRow>
-          <PropRow label={t(($) => $.table.lead)}>
+          <PropRow label="负责人">
             <Popover open={leadOpen} onOpenChange={(v) => { setLeadOpen(v); if (!v) setLeadFilter(""); }}>
               <PopoverTrigger
                 render={
                   <button type="button" className="inline-flex items-center gap-1.5 text-xs hover:text-foreground transition-colors">
                     {project.lead_type && project.lead_id ? (
                       <>
-                        <ActorAvatar actorType={project.lead_type} actorId={project.lead_id} size={16} enableHoverCard showStatusDot />
-                        <span className="cursor-pointer">{getActorName(project.lead_type, project.lead_id)}</span>
+                        <ActorAvatar actorType={project.lead_type} actorId={project.lead_id} size={16} />
+                        <span>{getActorName(project.lead_type, project.lead_id)}</span>
                       </>
                     ) : (
-                      <span className="text-muted-foreground">{t(($) => $.lead.no_lead)}</span>
+                      <span className="text-muted-foreground">未设置负责人</span>
                     )}
                   </button>
                 }
@@ -414,7 +385,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
                     type="text"
                     value={leadFilter}
                     onChange={(e) => setLeadFilter(e.target.value)}
-                    placeholder={t(($) => $.lead.assign_placeholder)}
+                    placeholder="搜索负责人..."
                     className="w-full bg-transparent text-sm placeholder:text-muted-foreground outline-none"
                   />
                 </div>
@@ -425,11 +396,11 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
                     className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent transition-colors"
                   >
                     <UserMinus className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span className="text-muted-foreground">{t(($) => $.lead.no_lead)}</span>
+                    <span className="text-muted-foreground">未设置负责人</span>
                   </button>
                   {filteredMembers.length > 0 && (
                     <>
-                      <div className="px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">{t(($) => $.lead.members_group)}</div>
+                      <div className="px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">成员</div>
                       {filteredMembers.map((m) => (
                         <button
                           type="button"
@@ -445,7 +416,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
                   )}
                   {filteredAgents.length > 0 && (
                     <>
-                      <div className="px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">{t(($) => $.lead.agents_group)}</div>
+                      <div className="px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">智能体</div>
                       {filteredAgents.map((a) => (
                         <button
                           type="button"
@@ -453,14 +424,14 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
                           onClick={() => { handleUpdateField({ lead_type: "agent", lead_id: a.id }); setLeadOpen(false); }}
                           className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent transition-colors"
                         >
-                          <ActorAvatar actorType="agent" actorId={a.id} size={16} showStatusDot />
+                          <ActorAvatar actorType="agent" actorId={a.id} size={16} />
                           <span>{a.name}</span>
                         </button>
                       ))}
                     </>
                   )}
                   {filteredMembers.length === 0 && filteredAgents.length === 0 && leadFilter && (
-                    <div className="px-2 py-3 text-center text-sm text-muted-foreground">{t(($) => $.lead.no_results)}</div>
+                    <div className="px-2 py-3 text-center text-sm text-muted-foreground">无结果</div>
                   )}
                 </div>
               </PopoverContent>
@@ -478,7 +449,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
               className={`flex w-full items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors mb-2 hover:bg-accent/70 ${progressOpen ? "" : "text-muted-foreground hover:text-foreground"}`}
               onClick={() => setProgressOpen(!progressOpen)}
             >
-              {t(($) => $.detail.section_progress)}
+              进度
               <ChevronRight className={`!size-3 shrink-0 stroke-[2.5] text-muted-foreground transition-transform ${progressOpen ? "rotate-90" : ""}`} />
             </button>
             {progressOpen && <div className="pl-2 flex items-center gap-3">
@@ -502,7 +473,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
           className={`flex w-full items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors mb-2 hover:bg-accent/70 ${descriptionOpen ? "" : "text-muted-foreground hover:text-foreground"}`}
           onClick={() => setDescriptionOpen(!descriptionOpen)}
         >
-          {t(($) => $.detail.section_description)}
+          说明
           <ChevronRight className={`!size-3 shrink-0 stroke-[2.5] text-muted-foreground transition-transform ${descriptionOpen ? "rotate-90" : ""}`} />
         </button>
         {descriptionOpen && <div className="pl-2">
@@ -510,15 +481,12 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
             ref={descEditorRef}
             key={projectId}
             defaultValue={project.description || ""}
-            placeholder={t(($) => $.detail.description_placeholder)}
+            placeholder="补充项目说明..."
             onUpdate={(md) => handleUpdateField({ description: md || null })}
             debounceMs={1500}
           />
         </div>}
       </div>
-
-      {/* Resources */}
-      <ProjectResourcesSection projectId={projectId} />
     </div>
   );
 
@@ -530,7 +498,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
           <PageHeader className="gap-2 bg-background text-sm">
             <div className="flex flex-1 items-center gap-1.5 min-w-0">
               <AppLink href={wsPaths.projects()} className="text-muted-foreground hover:text-foreground transition-colors shrink-0">
-                {workspaceName ?? t(($) => $.detail.breadcrumb_fallback)}
+                {workspaceName ?? "项目"}
               </AppLink>
               <ChevronRight className="h-3 w-3 text-muted-foreground/50 shrink-0" />
               <span className="truncate">{project.title}</span>
@@ -540,7 +508,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
                 variant="ghost"
                 size="icon-sm"
                 className={cn("text-muted-foreground", isPinned && "text-foreground")}
-                title={isPinned ? t(($) => $.detail.unpin_tooltip) : t(($) => $.detail.pin_tooltip)}
+                title={isPinned ? "从侧边栏取消固定" : "固定到侧边栏"}
                 onClick={() => {
                   if (isPinned) {
                     deletePinMut.mutate({ itemType: "project", itemId: projectId });
@@ -562,10 +530,10 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
                 <DropdownMenuContent align="end" className="w-auto">
                   <DropdownMenuItem onClick={() => {
                     navigator.clipboard.writeText(window.location.href);
-                    toast.success(t(($) => $.detail.toast_link_copied));
+                    toast.success("已复制链接");
                   }}>
                     <Link2 className="h-3.5 w-3.5" />
-                    {t(($) => $.detail.copy_link)}
+                    复制链接
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
@@ -573,7 +541,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
                     onClick={() => setDeleteDialogOpen(true)}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
-                    {t(($) => $.detail.delete_action)}
+                    删除项目
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -586,7 +554,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
                       className={sidebarOpen ? "" : "text-muted-foreground"}
                       onClick={() => {
                         if (isMobile) {
-                          setMobileSidebarOpen((open) => !open);
+                          setSidebarOpen(!sidebarOpen);
                         } else {
                           const panel = sidebarRef.current;
                           if (!panel) return;
@@ -599,19 +567,23 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
                     </Button>
                   }
                 />
-                <TooltipContent side="bottom">{t(($) => $.detail.sidebar_tooltip)}</TooltipContent>
+                <TooltipContent side="bottom">切换侧栏</TooltipContent>
               </Tooltip>
             </div>
           </PageHeader>
 
+          <ProjectCollaborationPanel
+            project={project}
+            leadName={
+              project.lead_type && project.lead_id
+                ? getActorName(project.lead_type, project.lead_id)
+                : null
+            }
+          />
+
           <ViewStoreProvider store={projectViewStore}>
               <IssuesHeader scopedIssues={projectIssues} />
-              <ProjectIssuesContent
-                projectId={projectId}
-                projectIssues={projectIssues}
-                scope={projectScope}
-                filter={projectFilter}
-              />
+              <ProjectIssuesContent projectIssues={projectIssues} />
               <BatchActionToolbar />
             </ViewStoreProvider>
           </div>
@@ -620,13 +592,13 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
         {!isMobile && (
         <ResizablePanel
           id="sidebar"
-          defaultSize={desktopSidebarOpen ? 320 : 0}
+          defaultSize={sidebarOpen ? 320 : 0}
           minSize={260}
           maxSize={420}
           collapsible
           groupResizeBehavior="preserve-pixel-size"
           panelRef={sidebarRef}
-          onResize={(size) => setDesktopSidebarOpen(size.inPixels > 0)}
+          onResize={(size) => setSidebarOpen(size.inPixels > 0)}
         >
           <div className="overflow-y-auto border-l h-full">
             <div className="p-4">
@@ -636,7 +608,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
         </ResizablePanel>
         )}
         {isMobile && (
-          <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
+          <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
             <SheetContent side="right" showCloseButton={false} className="w-[320px] overflow-y-auto p-4">
               {sidebarContent}
             </SheetContent>
@@ -648,15 +620,15 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t(($) => $.delete_dialog.title)}</AlertDialogTitle>
+            <AlertDialogTitle>删除项目</AlertDialogTitle>
             <AlertDialogDescription>
-              {t(($) => $.delete_dialog.description)}
+              删除后项目本身会被移除，但事项不会删除，只会解除关联。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{t(($) => $.delete_dialog.cancel)}</AlertDialogCancel>
+            <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-destructive text-white hover:bg-destructive/90">
-              {t(($) => $.delete_dialog.confirm)}
+              删除
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

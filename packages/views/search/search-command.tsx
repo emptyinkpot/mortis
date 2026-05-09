@@ -24,19 +24,18 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Command as CommandPrimitive } from "cmdk";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { SearchIssueResult, SearchProjectResult } from "@multica/core/types";
 import { api } from "@multica/core/api";
 import { useRecentIssuesStore } from "@multica/core/issues/stores";
-import { issueDetailOptions } from "@multica/core/issues/queries";
+import { issueListOptions } from "@multica/core/issues/queries";
 import { useWorkspaceId } from "@multica/core";
 import { paths, useCurrentWorkspace, useWorkspacePaths } from "@multica/core/paths";
 import type { WorkspacePaths } from "@multica/core/paths";
 import { useModalStore } from "@multica/core/modals";
 import { workspaceListOptions } from "@multica/core/workspace/queries";
 import { StatusIcon } from "../issues/components";
-import { ProjectIcon } from "../projects/components/project-icon";
 import { STATUS_CONFIG } from "@multica/core/issues/config";
 import { PROJECT_STATUS_CONFIG } from "@multica/core/projects/config";
 import type { ProjectStatus } from "@multica/core/types";
@@ -49,7 +48,6 @@ import {
 } from "@multica/ui/components/ui/dialog";
 import { useTheme } from "@multica/ui/components/common/theme-provider";
 import { useNavigation } from "../navigation";
-import { useT } from "../i18n";
 import { useSearchStore } from "./search-store";
 
 function HighlightText({ text, query }: { text: string; query: string }) {
@@ -97,6 +95,7 @@ type NavKey =
   | "issues"
   | "projects"
   | "agents"
+  | "internalChat"
   | "runtimes"
   | "skills"
   | "settings";
@@ -107,6 +106,18 @@ interface NavPage {
   icon: LucideIcon;
   keywords: string[];
 }
+
+const navPages: NavPage[] = [
+  { key: "inbox", label: "收件箱", icon: Inbox, keywords: ["收件箱", "通知", "inbox", "notifications"] },
+  { key: "myIssues", label: "我的事项", icon: CircleUser, keywords: ["我的事项", "分配", "my", "issues", "assigned"] },
+  { key: "issues", label: "事项", icon: ListTodo, keywords: ["事项", "任务", "issues", "tasks", "bugs"] },
+  { key: "projects", label: "项目", icon: FolderKanban, keywords: ["项目", "看板", "projects", "kanban"] },
+  { key: "agents", label: "智能体", icon: Bot, keywords: ["智能体", "机器人", "ai", "agents", "bots"] },
+  { key: "internalChat", label: "内部群聊", icon: MessageSquare, keywords: ["内部群聊", "群聊", "聊天", "讨论", "internal", "chat", "group"] },
+  { key: "runtimes", label: "运行时", icon: Monitor, keywords: ["运行时", "环境", "runtimes", "environments"] },
+  { key: "skills", label: "技能", icon: BookOpenText, keywords: ["技能", "库", "skills", "library"] },
+  { key: "settings", label: "设置", icon: Settings, keywords: ["设置", "配置", "settings", "config", "preferences"] },
+];
 
 type ThemeValue = "light" | "dark" | "system";
 
@@ -125,39 +136,24 @@ interface SearchResults {
 }
 
 export function SearchCommand() {
-  const { t } = useT("search");
-  const navPages: NavPage[] = [
-    { key: "inbox", label: t(($) => $.pages.inbox), icon: Inbox, keywords: ["inbox", "notifications", "收件箱"] },
-    { key: "myIssues", label: t(($) => $.pages.my_issues), icon: CircleUser, keywords: ["my", "issues", "assigned", "我的"] },
-    { key: "issues", label: t(($) => $.pages.issues), icon: ListTodo, keywords: ["issues", "tasks", "bugs"] },
-    { key: "projects", label: t(($) => $.pages.projects), icon: FolderKanban, keywords: ["projects", "kanban", "项目"] },
-    { key: "agents", label: t(($) => $.pages.agents), icon: Bot, keywords: ["agents", "bots", "ai"] },
-    { key: "runtimes", label: t(($) => $.pages.runtimes), icon: Monitor, keywords: ["runtimes", "environments"] },
-    { key: "skills", label: t(($) => $.pages.skills), icon: BookOpenText, keywords: ["skills", "library"] },
-    { key: "settings", label: t(($) => $.pages.settings), icon: Settings, keywords: ["settings", "config", "preferences", "设置"] },
-  ];
   const { push, pathname, getShareableUrl } = useNavigation();
   const open = useSearchStore((s) => s.open);
   const setOpen = useSearchStore((s) => s.setOpen);
   const recentItems = useRecentIssuesStore((s) => s.items);
   const wsId = useWorkspaceId();
   const p: WorkspacePaths = useWorkspacePaths();
+  const { data: allIssues = [] } = useQuery(issueListOptions(wsId));
   const { theme, setTheme } = useTheme();
   const currentWorkspace = useCurrentWorkspace();
   const { data: workspaces = [] } = useQuery(workspaceListOptions());
 
-  // Resolve each recent issue via its cached detail entry. Recent items are
-  // typically already in the detail cache because the user has opened them;
-  // if not, this triggers a lookup per id so Recent never depends on whether
-  // the issue falls inside the paginated list cache.
-  const recentDetailQueries = useQueries({
-    queries: recentItems.map((item) => issueDetailOptions(wsId, item.id)),
-  });
-  const recentIssues = useMemo(
-    () =>
-      recentDetailQueries.flatMap((q) => (q.data ? [q.data] : [])),
-    [recentDetailQueries],
-  );
+  const recentIssues = useMemo(() => {
+    const issueMap = new Map(allIssues.map((i) => [i.id, i]));
+    return recentItems.flatMap((item) => {
+      const issue = issueMap.get(item.id);
+      return issue ? [issue] : [];
+    });
+  }, [recentItems, allIssues]);
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResults>({ issues: [], projects: [] });
@@ -177,21 +173,19 @@ export function SearchCommand() {
 
   // Detect if current route is an issue detail page — /{slug}/issues/{id}.
   // Falls back to null on any other route; used to gate issue-specific commands.
-  const currentIssueId = useMemo(() => {
+  const currentIssue = useMemo(() => {
     const match = pathname.match(/\/issues\/([^/]+)$/);
     const raw = match?.[1];
-    return raw ? decodeURIComponent(raw) : null;
-  }, [pathname]);
-  const { data: currentIssue = null } = useQuery({
-    ...issueDetailOptions(wsId, currentIssueId ?? ""),
-    enabled: !!currentIssueId,
-  });
+    if (!raw) return null;
+    const id = decodeURIComponent(raw);
+    return allIssues.find((i) => i.id === id) ?? null;
+  }, [pathname, allIssues]);
 
   const commands = useMemo<CommandItem[]>(() => {
     const activeThemeCheck = (value: ThemeValue) =>
       theme === value ? (
         <Check
-          aria-label={t(($) => $.commands.current_theme_aria)}
+          aria-label="当前主题"
           className="ml-auto size-4 shrink-0 text-muted-foreground"
         />
       ) : undefined;
@@ -199,17 +193,17 @@ export function SearchCommand() {
     const items: CommandItem[] = [
       {
         key: "new-issue",
-        label: t(($) => $.commands.new_issue),
+        label: "新建事项",
         icon: Plus,
         keywords: ["new", "issue", "create", "add"],
         onSelect: () => {
-          useModalStore.getState().open("quick-create-issue");
+          useModalStore.getState().open("create-issue");
           setOpen(false);
         },
       },
       {
         key: "new-project",
-        label: t(($) => $.commands.new_project),
+        label: "新建项目",
         icon: Plus,
         keywords: ["new", "project", "create", "add"],
         onSelect: () => {
@@ -224,23 +218,24 @@ export function SearchCommand() {
       items.push(
         {
           key: "copy-issue-link",
-          label: t(($) => $.commands.copy_issue_link),
+          label: "复制事项链接",
           icon: Link2,
           keywords: ["copy", "link", "share", "url", identifier.toLowerCase()],
           onSelect: () => {
-            void navigator.clipboard.writeText(getShareableUrl(pathname));
-            toast.success(t(($) => $.toast.link_copied));
+            const url = getShareableUrl ? getShareableUrl(pathname) : window.location.href;
+            void navigator.clipboard.writeText(url);
+            toast.success("已复制链接");
             setOpen(false);
           },
         },
         {
           key: "copy-issue-identifier",
-          label: t(($) => $.commands.copy_identifier, { identifier }),
+          label: `复制编号（${identifier}）`,
           icon: Copy,
           keywords: ["copy", "id", "identifier", identifier.toLowerCase()],
           onSelect: () => {
             void navigator.clipboard.writeText(identifier);
-            toast.success(t(($) => $.toast.copied_identifier, { identifier }));
+            toast.success(`已复制 ${identifier}`);
             setOpen(false);
           },
         },
@@ -250,7 +245,7 @@ export function SearchCommand() {
     items.push(
       {
         key: "theme-light",
-        label: t(($) => $.commands.switch_to_light),
+        label: "切换到浅色主题",
         icon: Sun,
         keywords: ["light", "theme", "appearance", "mode", "bright"],
         trailing: activeThemeCheck("light"),
@@ -261,7 +256,7 @@ export function SearchCommand() {
       },
       {
         key: "theme-dark",
-        label: t(($) => $.commands.switch_to_dark),
+        label: "切换到深色主题",
         icon: Moon,
         keywords: ["dark", "theme", "appearance", "mode", "night"],
         trailing: activeThemeCheck("dark"),
@@ -272,7 +267,7 @@ export function SearchCommand() {
       },
       {
         key: "theme-system",
-        label: t(($) => $.commands.use_system_theme),
+        label: "跟随系统主题",
         icon: Monitor,
         keywords: ["system", "theme", "appearance", "mode", "auto"],
         trailing: activeThemeCheck("system"),
@@ -284,7 +279,7 @@ export function SearchCommand() {
     );
 
     return items;
-  }, [currentIssue, getShareableUrl, pathname, setOpen, setTheme, theme, t]);
+  }, [currentIssue, getShareableUrl, pathname, setOpen, setTheme, theme]);
 
   const filteredCommands = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -306,7 +301,11 @@ export function SearchCommand() {
     if (!q) return [];
     const others = workspaces.filter((w) => w.id !== currentWorkspace?.id);
     const wantsAll =
-      q.length >= 2 && ("workspace".startsWith(q) || "switch".startsWith(q));
+      q.length >= 2 &&
+      ("workspace".startsWith(q) ||
+        "switch".startsWith(q) ||
+        "工作区".startsWith(q) ||
+        "切换".startsWith(q));
     return others.filter(
       (w) =>
         wantsAll ||
@@ -449,9 +448,9 @@ export function SearchCommand() {
         showCloseButton={false}
       >
         <DialogHeader className="sr-only">
-          <DialogTitle>{t(($) => $.title)}</DialogTitle>
+          <DialogTitle>搜索</DialogTitle>
           <DialogDescription>
-            {t(($) => $.description)}
+            搜索页面、事项和项目
           </DialogDescription>
         </DialogHeader>
         <CommandPrimitive
@@ -462,7 +461,7 @@ export function SearchCommand() {
           <div className="flex items-center gap-3 border-b px-4 py-3">
             <SearchIcon className="size-5 shrink-0 text-muted-foreground" />
             <CommandPrimitive.Input
-              placeholder={t(($) => $.placeholder)}
+              placeholder="输入命令或开始搜索..."
               value={query}
               onValueChange={handleValueChange}
               className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
@@ -478,7 +477,7 @@ export function SearchCommand() {
             {filteredPages.length > 0 && (
               <CommandPrimitive.Group className="p-2">
                 <div className="px-3 py-1.5 text-xs font-medium text-muted-foreground">
-                  {t(($) => $.groups.pages)}
+                  页面
                 </div>
                 {filteredPages.map((page) => (
                   <CommandPrimitive.Item
@@ -500,7 +499,7 @@ export function SearchCommand() {
             {filteredCommands.length > 0 && (
               <CommandPrimitive.Group className="p-2">
                 <div className="px-3 py-1.5 text-xs font-medium text-muted-foreground">
-                  {t(($) => $.groups.commands)}
+                  命令
                 </div>
                 {filteredCommands.map((cmd) => (
                   <CommandPrimitive.Item
@@ -523,7 +522,7 @@ export function SearchCommand() {
             {filteredWorkspaces.length > 0 && (
               <CommandPrimitive.Group className="p-2">
                 <div className="px-3 py-1.5 text-xs font-medium text-muted-foreground">
-                  {t(($) => $.groups.switch_workspace)}
+                  切换工作区
                 </div>
                 {filteredWorkspaces.map((ws) => (
                   <CommandPrimitive.Item
@@ -557,13 +556,13 @@ export function SearchCommand() {
               filteredCommands.length === 0 &&
               filteredWorkspaces.length === 0 && (
                 <CommandPrimitive.Empty className="py-10 text-center text-sm text-muted-foreground">
-                  {t(($) => $.empty.no_results)}
+                  没有找到结果。
                 </CommandPrimitive.Empty>
               )}
 
             {!isLoading && results.projects.length > 0 && (
               <CommandPrimitive.Group
-                heading={t(($) => $.groups.projects)}
+                heading="项目"
                 className="p-2 [&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground"
               >
                 {results.projects.map((project) => (
@@ -574,7 +573,9 @@ export function SearchCommand() {
                     className="flex cursor-default select-none flex-col gap-1 rounded-lg px-3 py-2.5 text-sm outline-none data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 data-selected:bg-accent"
                   >
                     <div className="flex items-center gap-2.5">
-                      <ProjectIcon project={project} size="md" />
+                      <span className="size-4 shrink-0 text-center text-sm leading-4">
+                        {project.icon || <FolderKanban className="size-4 text-muted-foreground" />}
+                      </span>
                       <span className="truncate">
                         <HighlightText text={project.title} query={query} />
                       </span>
@@ -602,7 +603,7 @@ export function SearchCommand() {
 
             {!isLoading && results.issues.length > 0 && (
               <CommandPrimitive.Group
-                heading={t(($) => $.groups.issues)}
+                heading="事项"
                 className="p-2 [&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground"
               >
                 {results.issues.map((issue) => (
@@ -650,7 +651,7 @@ export function SearchCommand() {
               <CommandPrimitive.Group className="p-2">
                 <div className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-muted-foreground">
                   <Clock className="size-3" />
-                  <span>{t(($) => $.groups.recent)}</span>
+                  <span>最近访问</span>
                 </div>
                 {recentIssues.map((item) => (
                   <CommandPrimitive.Item
@@ -679,7 +680,7 @@ export function SearchCommand() {
 
             {!isLoading && !query.trim() && recentIssues.length === 0 && (
               <div className="px-5 py-4 text-center text-xs text-muted-foreground">
-                {t(($) => $.empty.type_to_search)}
+                输入内容以搜索事项和项目
               </div>
             )}
           </CommandPrimitive.List>

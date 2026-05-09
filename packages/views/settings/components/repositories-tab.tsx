@@ -13,10 +13,8 @@ import { useCurrentWorkspace } from "@multica/core/paths";
 import { memberListOptions, workspaceKeys } from "@multica/core/workspace/queries";
 import { api } from "@multica/core/api";
 import type { Workspace, WorkspaceRepo } from "@multica/core/types";
-import { useT } from "../../i18n";
 
 export function RepositoriesTab() {
-  const { t } = useT("settings");
   const user = useAuthStore((s) => s.user);
   const workspace = useCurrentWorkspace();
   const wsId = useWorkspaceId();
@@ -41,24 +39,24 @@ export function RepositoriesTab() {
       qc.setQueryData(workspaceKeys.list(), (old: Workspace[] | undefined) =>
         old?.map((ws) => (ws.id === updated.id ? updated : ws)),
       );
-      toast.success(t(($) => $.repositories.toast_saved));
+      toast.success("Repositories saved");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : t(($) => $.repositories.toast_save_failed));
+      toast.error(e instanceof Error ? e.message : "Failed to save repositories");
     } finally {
       setSaving(false);
     }
   };
 
   const handleAddRepo = () => {
-    setRepos([...repos, { url: "" }]);
+    setRepos([...repos, { url: "", description: "" }]);
   };
 
   const handleRemoveRepo = (index: number) => {
     setRepos(repos.filter((_, i) => i !== index));
   };
 
-  const handleRepoChange = (index: number, value: string) => {
-    setRepos(repos.map((r, i) => (i === index ? { ...r, url: value } : r)));
+  const handleRepoChange = (index: number, field: keyof WorkspaceRepo, value: string) => {
+    setRepos(repos.map((r, i) => (i === index ? { ...r, [field]: value } : r)));
   };
 
   if (!workspace) return null;
@@ -66,24 +64,34 @@ export function RepositoriesTab() {
   return (
     <div className="space-y-8">
       <section className="space-y-4">
-        <h2 className="text-sm font-semibold">{t(($) => $.repositories.section_title)}</h2>
+        <h2 className="text-sm font-semibold">Repositories</h2>
 
         <Card>
           <CardContent className="space-y-3">
             <p className="text-xs text-muted-foreground">
-              {t(($) => $.repositories.description)}
+              Git repositories associated with this workspace. Agents use these to clone and work on code.
             </p>
 
             {repos.map((repo, index) => (
-              <div key={index} className="flex items-start gap-2">
-                <Input
-                  type="url"
-                  value={repo.url}
-                  onChange={(e) => handleRepoChange(index, e.target.value)}
-                  disabled={!canManageWorkspace}
-                  placeholder={t(($) => $.repositories.url_placeholder)}
-                  className="flex-1 min-w-0 text-sm"
-                />
+              <div key={index} className="flex gap-2">
+                <div className="flex-1 space-y-1.5">
+                  <Input
+                    type="url"
+                    value={repo.url}
+                    onChange={(e) => handleRepoChange(index, "url", e.target.value)}
+                    disabled={!canManageWorkspace}
+                    placeholder="https://git.example.com/org/repo.git"
+                    className="text-sm"
+                  />
+                  <Input
+                    type="text"
+                    value={repo.description}
+                    onChange={(e) => handleRepoChange(index, "description", e.target.value)}
+                    disabled={!canManageWorkspace}
+                    placeholder="Description (e.g. Go backend + Next.js frontend)"
+                    className="text-sm"
+                  />
+                </div>
                 {canManageWorkspace && (
                   <Button
                     variant="ghost"
@@ -98,10 +106,10 @@ export function RepositoriesTab() {
             ))}
 
             {canManageWorkspace && (
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+              <div className="flex items-center justify-between pt-1">
                 <Button variant="outline" size="sm" onClick={handleAddRepo}>
                   <Plus className="h-3 w-3" />
-                  {t(($) => $.repositories.add)}
+                  Add repository
                 </Button>
                 <Button
                   size="sm"
@@ -109,14 +117,14 @@ export function RepositoriesTab() {
                   disabled={saving}
                 >
                   <Save className="h-3 w-3" />
-                  {saving ? t(($) => $.repositories.saving) : t(($) => $.repositories.save)}
+                  {saving ? "Saving..." : "Save"}
                 </Button>
               </div>
             )}
 
             {!canManageWorkspace && (
               <p className="text-xs text-muted-foreground">
-                {t(($) => $.repositories.manage_hint)}
+                Only admins and owners can manage repositories.
               </p>
             )}
           </CardContent>

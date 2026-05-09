@@ -1,5 +1,3 @@
-import type { Label } from "./label";
-
 export type IssueStatus =
   | "backlog"
   | "todo"
@@ -40,7 +38,6 @@ export interface Issue {
   position: number;
   due_date: string | null;
   reactions?: IssueReaction[];
-  labels?: Label[];
   created_at: string;
   updated_at: string;
 }

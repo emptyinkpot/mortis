@@ -2,11 +2,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Issue } from "@multica/core/types";
-import { I18nProvider } from "@multica/core/i18n/react";
-import enCommon from "../../locales/en/common.json";
-import enIssues from "../../locales/en/issues.json";
-
-const TEST_RESOURCES = { en: { common: enCommon, issues: enIssues } };
 vi.mock("@multica/core/hooks", () => ({
   useWorkspaceId: () => "ws-1",
 }));
@@ -111,10 +106,9 @@ const mockViewState = {
   creatorFilters: [] as { type: string; id: string }[],
   projectFilters: [] as string[],
   includeNoProject: false,
-  labelFilters: [] as string[],
   sortBy: "position" as const,
   sortDirection: "asc" as const,
-  cardProperties: { priority: true, description: true, assignee: true, dueDate: true, project: true, childProgress: true, labels: true },
+  cardProperties: { priority: true, description: true, assignee: true, dueDate: true, project: true, childProgress: true },
   listCollapsedStatuses: [] as string[],
   setViewMode: vi.fn(),
   toggleStatusFilter: vi.fn(),
@@ -124,7 +118,6 @@ const mockViewState = {
   toggleCreatorFilter: vi.fn(),
   toggleProjectFilter: vi.fn(),
   toggleNoProject: vi.fn(),
-  toggleLabelFilter: vi.fn(),
   hideStatus: vi.fn(),
   showStatus: vi.fn(),
   clearFilters: vi.fn(),
@@ -137,7 +130,6 @@ const mockViewState = {
 vi.mock("@multica/core/issues/stores/view-store", () => ({
   useClearFiltersOnWorkspaceChange: () => {},
   viewStorePersistOptions: () => ({ name: "test", storage: undefined, partialize: (s: any) => s }),
-  mergeViewStatePersisted: (_p: unknown, c: any) => c,
   viewStoreSlice: vi.fn(),
   useIssueViewStore: Object.assign(
     (selector?: any) => (selector ? selector(mockViewState) : mockViewState),
@@ -161,7 +153,6 @@ vi.mock("@multica/core/issues/stores/view-store", () => ({
     { key: "assignee", label: "Assignee" },
     { key: "dueDate", label: "Due date" },
     { key: "project", label: "Project" },
-    { key: "labels", label: "Labels" },
     { key: "childProgress", label: "Sub-issue progress" },
   ],
 }));
@@ -343,11 +334,9 @@ function renderWithQuery(ui: React.ReactElement) {
     },
   });
   return render(
-    <I18nProvider locale="en" resources={TEST_RESOURCES}>
-      <QueryClientProvider client={qc}>
-        {ui}
-      </QueryClientProvider>
-    </I18nProvider>,
+    <QueryClientProvider client={qc}>
+      {ui}
+    </QueryClientProvider>,
   );
 }
 
@@ -373,10 +362,11 @@ describe("IssuesPage (shared)", () => {
 
   it("renders issue titles after data loads", async () => {
     mockListIssues.mockImplementation((params: any) =>
-      Promise.resolve({
-        issues: mockIssues.filter((i) => i.status === params?.status),
-        total: mockIssues.filter((i) => i.status === params?.status).length,
-      }),
+      Promise.resolve(
+        params?.open_only
+          ? { issues: mockIssues, total: mockIssues.length }
+          : { issues: [], total: 0 },
+      ),
     );
 
     renderWithQuery(<IssuesPage />);
@@ -388,10 +378,11 @@ describe("IssuesPage (shared)", () => {
 
   it("renders board column headers", async () => {
     mockListIssues.mockImplementation((params: any) =>
-      Promise.resolve({
-        issues: mockIssues.filter((i) => i.status === params?.status),
-        total: mockIssues.filter((i) => i.status === params?.status).length,
-      }),
+      Promise.resolve(
+        params?.open_only
+          ? { issues: mockIssues, total: mockIssues.length }
+          : { issues: [], total: 0 },
+      ),
     );
 
     renderWithQuery(<IssuesPage />);
@@ -403,10 +394,11 @@ describe("IssuesPage (shared)", () => {
 
   it("shows workspace breadcrumb with 'Issues' label", async () => {
     mockListIssues.mockImplementation((params: any) =>
-      Promise.resolve({
-        issues: mockIssues.filter((i) => i.status === params?.status),
-        total: mockIssues.filter((i) => i.status === params?.status).length,
-      }),
+      Promise.resolve(
+        params?.open_only
+          ? { issues: mockIssues, total: mockIssues.length }
+          : { issues: [], total: 0 },
+      ),
     );
 
     renderWithQuery(<IssuesPage />);

@@ -11,12 +11,10 @@ const (
 	EventCommentCreated       = "comment:created"
 	EventCommentUpdated       = "comment:updated"
 	EventCommentDeleted       = "comment:deleted"
-	EventCommentResolved      = "comment:resolved"
-	EventCommentUnresolved    = "comment:unresolved"
-	EventReactionAdded        = "reaction:added"
-	EventReactionRemoved      = "reaction:removed"
-	EventIssueReactionAdded   = "issue_reaction:added"
-	EventIssueReactionRemoved = "issue_reaction:removed"
+	EventReactionAdded          = "reaction:added"
+	EventReactionRemoved        = "reaction:removed"
+	EventIssueReactionAdded     = "issue_reaction:added"
+	EventIssueReactionRemoved   = "issue_reaction:removed"
 
 	// Agent events
 	EventAgentStatus   = "agent:status"
@@ -24,18 +22,13 @@ const (
 	EventAgentArchived = "agent:archived"
 	EventAgentRestored = "agent:restored"
 
-	// Task events (server <-> daemon).
-	// Each event maps to a status transition on agent_task_queue. Front-end
-	// subscribes by `task:` prefix and invalidates the workspace task
-	// snapshot, so the granularity here is "what does the user want to see
-	// change" — not "every internal status flip".
-	EventTaskQueued    = "task:queued"    // ∅ → queued (enqueue / retry create)
-	EventTaskDispatch  = "task:dispatch"  // queued → dispatched (daemon claim)
+	// Task events (server <-> daemon)
+	EventTaskDispatch  = "task:dispatch"
 	EventTaskProgress  = "task:progress"
-	EventTaskCompleted = "task:completed" // running → completed
-	EventTaskFailed    = "task:failed"    // running → failed
+	EventTaskCompleted = "task:completed"
+	EventTaskFailed    = "task:failed"
 	EventTaskMessage   = "task:message"
-	EventTaskCancelled = "task:cancelled" // * → cancelled
+	EventTaskCancelled = "task:cancelled"
 
 	// Inbox events
 	EventInboxNew           = "inbox:new"
@@ -66,28 +59,18 @@ const (
 	EventSkillDeleted = "skill:deleted"
 
 	// Chat events
-	EventChatMessage        = "chat:message"
-	EventChatDone           = "chat:done"
-	EventChatSessionRead    = "chat:session_read"
-	EventChatSessionDeleted = "chat:session_deleted"
+	EventChatMessage     = "chat:message"
+	EventChatDone        = "chat:done"
+	EventChatSessionRead = "chat:session_read"
 
 	// Project events
-	EventProjectCreated         = "project:created"
-	EventProjectUpdated         = "project:updated"
-	EventProjectDeleted         = "project:deleted"
-	EventProjectResourceCreated = "project_resource:created"
-	EventProjectResourceDeleted = "project_resource:deleted"
-
-	// Label events
-	EventLabelCreated       = "label:created"
-	EventLabelUpdated       = "label:updated"
-	EventLabelDeleted       = "label:deleted"
-	EventIssueLabelsChanged = "issue_labels:changed"
+	EventProjectCreated = "project:created"
+	EventProjectUpdated = "project:updated"
+	EventProjectDeleted = "project:deleted"
 
 	// Pin events
-	EventPinCreated   = "pin:created"
-	EventPinDeleted   = "pin:deleted"
-	EventPinReordered = "pin:reordered"
+	EventPinCreated = "pin:created"
+	EventPinDeleted = "pin:deleted"
 
 	// Invitation events
 	EventInvitationCreated  = "invitation:created"
@@ -103,8 +86,6 @@ const (
 	EventAutopilotRunDone  = "autopilot:run_done"
 
 	// Daemon events
-	EventDaemonHeartbeat     = "daemon:heartbeat"
-	EventDaemonHeartbeatAck  = "daemon:heartbeat_ack"
-	EventDaemonRegister      = "daemon:register"
-	EventDaemonTaskAvailable = "daemon:task_available"
+	EventDaemonHeartbeat = "daemon:heartbeat"
+	EventDaemonRegister  = "daemon:register"
 )

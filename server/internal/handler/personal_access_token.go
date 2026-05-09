@@ -2,12 +2,10 @@ package handler
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/multica-ai/multica/server/internal/auth"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
@@ -39,8 +37,8 @@ func patToResponse(pat db.PersonalAccessToken) PersonalAccessTokenResponse {
 }
 
 type CreatePATRequest struct {
-	Name          string `json:"name"`
-	ExpiresInDays *int   `json:"expires_in_days"`
+	Name         string `json:"name"`
+	ExpiresInDays *int  `json:"expires_in_days"`
 }
 
 func (h *Handler) CreatePersonalAccessToken(w http.ResponseWriter, r *http.Request) {
@@ -79,11 +77,11 @@ func (h *Handler) CreatePersonalAccessToken(w http.ResponseWriter, r *http.Reque
 	}
 
 	pat, err := h.Queries.CreatePersonalAccessToken(r.Context(), db.CreatePersonalAccessTokenParams{
-		UserID:      parseUUID(userID),
-		Name:        req.Name,
-		TokenHash:   auth.HashToken(rawToken),
+		UserID:    parseUUID(userID),
+		Name:      req.Name,
+		TokenHash: auth.HashToken(rawToken),
 		TokenPrefix: prefix,
-		ExpiresAt:   expiresAt,
+		ExpiresAt: expiresAt,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create token")
@@ -122,23 +120,10 @@ func (h *Handler) RevokePersonalAccessToken(w http.ResponseWriter, r *http.Reque
 	}
 
 	id := chi.URLParam(r, "id")
-	idUUID, ok := parseUUIDOrBadRequest(w, id, "token id")
-	if !ok {
-		return
-	}
-	hash, err := h.Queries.RevokePersonalAccessToken(r.Context(), db.RevokePersonalAccessTokenParams{
-		ID:     idUUID,
+	if err := h.Queries.RevokePersonalAccessToken(r.Context(), db.RevokePersonalAccessTokenParams{
+		ID:     parseUUID(id),
 		UserID: parseUUID(userID),
-	})
-	switch {
-	case err == nil:
-		// Drop the cache entry immediately so the revocation takes effect
-		// before the TTL would otherwise expire the cached lookup.
-		h.PATCache.Invalidate(r.Context(), hash)
-	case errors.Is(err, pgx.ErrNoRows):
-		// Token doesn't exist or doesn't belong to this user. Preserve the
-		// pre-existing idempotent 204 behavior — no cache entry to clear.
-	default:
+	}); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to revoke token")
 		return
 	}

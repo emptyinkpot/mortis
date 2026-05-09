@@ -1,0 +1,39 @@
+{
+  "status": "remote-first-worktree",
+  "remote_first_source": {
+    "host": "ubuntu@124.220.233.126",
+    "path": "/srv/multica",
+    "url": "ubuntu@124.220.233.126:/srv/multica",
+    "branch": "main",
+    "role": "default shared source worksite for Mortis code, documentation, validation, commits, and production-facing deployment checks"
+  },
+  "github": {
+    "repository": "https://github.com/emptyinkpot/mortis-multica-source",
+    "default_branch": "main",
+    "role": "canonical Git history and collaboration remote"
+  },
+  "retired_local_source": {
+    "path": "E:\\My Project\\Mortis",
+    "status": "deleted and retired",
+    "rule": "Do not treat this path as the source of truth. If recreated, it is only a synchronized copy of GitHub/main."
+  },
+  "retired_deploy_worktree": {
+    "path": "E:\\My Project\\Mortis-deploy-l3",
+    "branch": "deploy/l3-manager-dispatcher",
+    "merged_into_main_by": "913ba1e",
+    "status": "retired and no longer a source tree",
+    "rule": "Do not edit or deploy from this path again."
+  },
+  "workflow": [
+    "edit ubuntu@124.220.233.126:/srv/multica",
+    "validate remotely",
+    "commit in /srv/multica",
+    "push GitHub main",
+    "treat future local checkouts as synchronized copies only"
+  ],
+  "runtime_state_not_tracked": [
+    "agent-workspaces/",
+    "openlist-export/",
+    "codex-home/"
+  ]
+}

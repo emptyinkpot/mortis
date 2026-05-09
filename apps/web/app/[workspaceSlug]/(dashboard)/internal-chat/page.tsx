@@ -1,0 +1,1 @@
+export { InternalGroupChatPage as default } from "@multica/views/agents";

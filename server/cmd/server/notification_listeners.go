@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"log/slog"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/multica-ai/multica/server/internal/events"
 	"github.com/multica-ai/multica/server/internal/handler"
 	"github.com/multica-ai/multica/server/internal/util"
@@ -67,153 +66,11 @@ func parseMentions(content string) []mention {
 	return result
 }
 
-// parentBubbleNotifTypes is the allowlist of inbox notification types that
-// bubble up from a sub-issue to subscribers of its parent. Other event types
-// only notify subscribers of the sub-issue itself, to keep parent watchers'
-// inboxes focused on the signal that matters most: status transitions.
-var parentBubbleNotifTypes = map[string]bool{
-	"status_changed": true,
-}
-
-// notifTypeToGroup maps each InboxItemType to a user-configurable preference
-// group. Types not in this map are always delivered (not configurable).
-var notifTypeToGroup = map[string]string{
-	"issue_assigned":  "assignments",
-	"unassigned":      "assignments",
-	"assignee_changed": "assignments",
-	"status_changed":  "status_changes",
-	"new_comment":     "comments",
-	"mentioned":       "comments",
-	"priority_changed": "updates",
-	"due_date_changed": "updates",
-	"task_completed":  "agent_activity",
-	"task_failed":     "agent_activity",
-	"agent_blocked":   "agent_activity",
-	"agent_completed": "agent_activity",
-}
-
-// isNotifMuted returns true if the given notification type is muted for a user
-// based on their parsed preferences map.
-func isNotifMuted(prefs map[string]string, notifType string) bool {
-	group, ok := notifTypeToGroup[notifType]
-	if !ok {
-		return false // unconfigurable types are always delivered
-	}
-	return prefs[group] == "muted"
-}
-
-// loadUserPrefs loads notification preferences for a set of user IDs in a
-// workspace. Returns a map from user_id string to parsed preferences.
-func loadUserPrefs(
-	ctx context.Context,
-	queries *db.Queries,
-	workspaceID string,
-	userIDs []string,
-) map[string]map[string]string {
-	if len(userIDs) == 0 {
-		return nil
-	}
-
-	uuids := make([]pgtype.UUID, len(userIDs))
-	for i, id := range userIDs {
-		uuids[i] = parseUUID(id)
-	}
-
-	rows, err := queries.ListNotificationPreferencesByUsers(ctx, db.ListNotificationPreferencesByUsersParams{
-		WorkspaceID: parseUUID(workspaceID),
-		UserIds:     uuids,
-	})
-	if err != nil {
-		slog.Error("failed to load notification preferences", "error", err)
-		return nil
-	}
-
-	result := make(map[string]map[string]string, len(rows))
-	for _, row := range rows {
-		var prefs map[string]string
-		if err := json.Unmarshal(row.Preferences, &prefs); err != nil {
-			continue
-		}
-		result[util.UUIDToString(row.UserID)] = prefs
-	}
-	return result
-}
-
-// terminalStatusForTaskFailedDismiss is the set of issue statuses that mark
-// the issue as "the user no longer needs to triage past failures." When a
-// status change lands on one of these, any pre-existing task_failed inbox
-// rows for the issue are archived so the inbox stays a fresh-signal surface.
-// `in_review` is included because in Multica's agent flow that's the most
-// reliable "work delivered" handoff — and a status flip back to in_progress
-// will simply produce new task_failed rows that surface normally.
-var terminalStatusForTaskFailedDismiss = map[string]bool{
-	"in_review": true,
-	"done":      true,
-	"cancelled": true,
-}
-
-// archiveStaleTaskFailedInbox archives all task_failed inbox rows for the
-// given issue and notifies each affected member recipient via
-// inbox:batch-archived so connected clients self-heal.
-func archiveStaleTaskFailedInbox(
-	ctx context.Context,
-	queries *db.Queries,
-	bus *events.Bus,
-	workspaceID string,
-	issueID string,
-) {
-	rows, err := queries.ArchiveInboxByIssueAndType(ctx, db.ArchiveInboxByIssueAndTypeParams{
-		WorkspaceID: parseUUID(workspaceID),
-		IssueID:     parseUUID(issueID),
-		Type:        "task_failed",
-	})
-	if err != nil {
-		slog.Error("auto-archive task_failed inbox: query failed",
-			"workspace_id", workspaceID, "issue_id", issueID, "error", err)
-		return
-	}
-	if len(rows) == 0 {
-		return
-	}
-
-	// Dedupe recipients: the listener creates one row per failure event per
-	// subscriber, so a long-running issue can yield several rows for the
-	// same recipient.
-	counts := map[string]int{}
-	for _, row := range rows {
-		// Inbox rows for task_failed only target member recipients today
-		// (notifySubscribers skips agent subscribers), but defend the WS
-		// layer against future widening — only members get a personal feed.
-		if row.RecipientType != "member" {
-			continue
-		}
-		counts[util.UUIDToString(row.RecipientID)]++
-	}
-
-	for recipientID, count := range counts {
-		bus.Publish(events.Event{
-			Type:        protocol.EventInboxBatchArchived,
-			WorkspaceID: workspaceID,
-			Payload: map[string]any{
-				"recipient_id": recipientID,
-				"count":        int64(count),
-				"issue_id":     issueID,
-				"reason":       "issue_status_terminal",
-			},
-		})
-	}
-
-	slog.Info("auto-archive task_failed inbox: archived stale rows",
-		"workspace_id", workspaceID, "issue_id", issueID,
-		"row_count", len(rows), "recipient_count", len(counts))
-}
-
 // notifySubscribers queries the subscriber table for an issue, excludes the
 // actor and any extra IDs, and creates inbox items for each remaining member
 // subscriber. Publishes an inbox:new event for each notification.
-// If the issue has a parent and the notification type is in the bubble
-// allowlist, parent issue subscribers are also notified (deduplicated
-// against direct subscribers).
+// If the issue has a parent, parent issue subscribers are also notified
+// (deduplicated against direct subscribers).
 func notifySubscribers(
 	ctx context.Context,
 	queries *db.Queries,
@@ -232,11 +89,6 @@ func notifySubscribers(
 	notified := notifyIssueSubscribers(ctx, queries, bus,
 		issueID, issueID, issueStatus, workspaceID, e, exclude,
 		notifType, severity, title, body, details)
-
-	// Only a small allowlist of event types bubbles to parent subscribers.
-	if !parentBubbleNotifTypes[notifType] {
-		return
-	}
 
 	// Also notify parent issue subscribers if this is a sub-issue.
 	issue, err := queries.GetIssue(ctx, parseUUID(issueID))
@@ -296,15 +148,6 @@ func notifyIssueSubscribers(
 		return notified
 	}
 
-	// Batch-load notification preferences for all member subscribers.
-	var memberIDs []string
-	for _, sub := range subs {
-		if sub.UserType == "member" {
-			memberIDs = append(memberIDs, util.UUIDToString(sub.UserID))
-		}
-	}
-	userPrefs := loadUserPrefs(ctx, queries, workspaceID, memberIDs)
-
 	for _, sub := range subs {
 		// Only notify member-type subscribers (not agents)
 		if sub.UserType != "member" {
@@ -320,11 +163,6 @@ func notifyIssueSubscribers(
 
 		// Skip any extra excluded IDs
 		if exclude[subID] {
-			continue
-		}
-
-		// Skip if this notification type is muted by the user
-		if prefs, ok := userPrefs[subID]; ok && isNotifMuted(prefs, notifType) {
 			continue
 		}
 
@@ -383,14 +221,6 @@ func notifyDirect(
 	// Skip if recipient is the actor
 	if recipientID == e.ActorID {
 		return
-	}
-
-	// Check notification preferences for member recipients.
-	if recipientType == "member" {
-		prefs := loadUserPrefs(ctx, queries, workspaceID, []string{recipientID})
-		if p, ok := prefs[recipientID]; ok && isNotifMuted(p, notifType) {
-			return
-		}
 	}
 
 	item, err := queries.CreateInboxItem(ctx, db.CreateInboxItemParams{
@@ -464,21 +294,8 @@ func notifyMentionedMembers(
 		}
 	}
 
-	// Batch-load notification preferences for all mention recipients.
-	var mentionUserIDs []string
-	for id := range recipientIDs {
-		if id != e.ActorID && !skip[id] {
-			mentionUserIDs = append(mentionUserIDs, id)
-		}
-	}
-	mentionPrefs := loadUserPrefs(context.Background(), queries, e.WorkspaceID, mentionUserIDs)
-
 	for id := range recipientIDs {
 		if id == e.ActorID || skip[id] {
-			continue
-		}
-		// Skip if mentions/comments are muted by this user
-		if p, ok := mentionPrefs[id]; ok && isNotifMuted(p, "mentioned") {
 			continue
 		}
 		item, err := queries.CreateInboxItem(context.Background(), db.CreateInboxItemParams{
@@ -637,14 +454,6 @@ func registerNotificationListeners(bus *events.Bus, queries *db.Queries) {
 				nil, "status_changed", "info",
 				issue.Title, "",
 				statusDetails)
-
-			// When the issue progresses past the failure (in_review / done /
-			// cancelled), retire any stale task_failed inbox rows so the
-			// inbox reflects the current state of the work, not its history.
-			// The activity log keeps the full failure history for audit.
-			if terminalStatusForTaskFailedDismiss[issue.Status] {
-				archiveStaleTaskFailedInbox(ctx, queries, bus, e.WorkspaceID, issue.ID)
-			}
 		}
 
 		if priorityChanged, _ := payload["priority_changed"].(bool); priorityChanged {

@@ -1,27 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { ReactElement, ReactNode } from "react";
-import { I18nProvider } from "@multica/core/i18n/react";
-import enCommon from "../locales/en/common.json";
-import enAuth from "../locales/en/auth.json";
-import enSettings from "../locales/en/settings.json";
-
-const TEST_RESOURCES = {
-  en: { common: enCommon, auth: enAuth, settings: enSettings },
-};
-
-function I18nWrapper({ children }: { children: ReactNode }) {
-  return (
-    <I18nProvider locale="en" resources={TEST_RESOURCES}>
-      {children}
-    </I18nProvider>
-  );
-}
-
-function renderWithI18n(ui: ReactElement) {
-  return render(ui, { wrapper: I18nWrapper });
-}
 
 // ---------------------------------------------------------------------------
 // Hoisted mocks
@@ -114,17 +93,17 @@ describe("LoginPage", () => {
   // Email step rendering
   // -------------------------------------------------------------------------
 
-  it("renders email form with 'Sign in to Multica' title", () => {
-    renderWithI18n(<LoginPage onSuccess={onSuccess} />);
+  it("renders email form with 进入 Mortis title", () => {
+    render(<LoginPage onSuccess={onSuccess} />);
     expect(
-      screen.getByText(/sign in to multica/i),
+      screen.getByText(/进入\s*mortis/i),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/enter your email to get a login code/i),
+      screen.getByText(/恢复私人工作区访问/i),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/邮箱/i)).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /continue/i }),
+      screen.getByRole("button", { name: /继续/i }),
     ).toBeInTheDocument();
   });
 
@@ -133,18 +112,18 @@ describe("LoginPage", () => {
   // -------------------------------------------------------------------------
 
   it("shows error when submitting with empty email", async () => {
-    renderWithI18n(<LoginPage onSuccess={onSuccess} />);
+    render(<LoginPage onSuccess={onSuccess} />);
 
     // The Continue button is disabled when email is empty, so we submit the
     // form programmatically the same way the component does — via form submit.
     // Since the button is disabled, we directly call handleSendCode's logic
     // by removing the required attr and submitting.
-    const emailInput = screen.getByLabelText(/email/i);
+    const emailInput = screen.getByLabelText(/邮箱/i);
     // The input has required + the button is disabled, so we need to type
     // a space then clear to trigger the empty-email error path.
     // Actually, the component guards `if (!email)` in handleSendCode.
     // But the button is disabled when `!email`. Let's verify:
-    const button = screen.getByRole("button", { name: /continue/i });
+    const button = screen.getByRole("button", { name: /继续/i });
     expect(button).toBeDisabled();
 
     // Type an email to enable button, then clear it — button becomes disabled again
@@ -161,11 +140,11 @@ describe("LoginPage", () => {
 
   it("calls sendCode on form submit with email", async () => {
     mockSendCode.mockResolvedValueOnce(undefined);
-    renderWithI18n(<LoginPage onSuccess={onSuccess} />);
+    render(<LoginPage onSuccess={onSuccess} />);
 
     const user = userEvent.setup();
-    await user.type(screen.getByLabelText(/email/i), "test@example.com");
-    await user.click(screen.getByRole("button", { name: /continue/i }));
+    await user.type(screen.getByLabelText(/邮箱/i), "test@example.com");
+    await user.click(screen.getByRole("button", { name: /继续/i }));
 
     expect(mockSendCode).toHaveBeenCalledWith("test@example.com");
   });
@@ -173,26 +152,26 @@ describe("LoginPage", () => {
   it("shows 'Sending code...' while submitting", async () => {
     // Never resolve so loading stays true
     mockSendCode.mockReturnValueOnce(new Promise(() => {}));
-    renderWithI18n(<LoginPage onSuccess={onSuccess} />);
+    render(<LoginPage onSuccess={onSuccess} />);
 
     const user = userEvent.setup();
-    await user.type(screen.getByLabelText(/email/i), "test@example.com");
-    await user.click(screen.getByRole("button", { name: /continue/i }));
+    await user.type(screen.getByLabelText(/邮箱/i), "test@example.com");
+    await user.click(screen.getByRole("button", { name: /继续/i }));
 
-    expect(screen.getByText(/sending code/i)).toBeInTheDocument();
+    expect(screen.getByText(/发送验证码中/i)).toBeInTheDocument();
   });
 
   it("transitions to code step after successful sendCode", async () => {
     mockSendCode.mockResolvedValueOnce(undefined);
-    renderWithI18n(<LoginPage onSuccess={onSuccess} />);
+    render(<LoginPage onSuccess={onSuccess} />);
 
     const user = userEvent.setup();
-    await user.type(screen.getByLabelText(/email/i), "test@example.com");
-    await user.click(screen.getByRole("button", { name: /continue/i }));
+    await user.type(screen.getByLabelText(/邮箱/i), "test@example.com");
+    await user.click(screen.getByRole("button", { name: /继续/i }));
 
     await waitFor(() => {
       expect(
-        screen.getByText(/check your email/i),
+        screen.getByText(/检查邮箱/i),
       ).toBeInTheDocument();
     });
     expect(screen.getByText(/test@example.com/)).toBeInTheDocument();
@@ -200,11 +179,11 @@ describe("LoginPage", () => {
 
   it("shows error when sendCode fails", async () => {
     mockSendCode.mockRejectedValueOnce(new Error("Rate limited"));
-    renderWithI18n(<LoginPage onSuccess={onSuccess} />);
+    render(<LoginPage onSuccess={onSuccess} />);
 
     const user = userEvent.setup();
-    await user.type(screen.getByLabelText(/email/i), "test@example.com");
-    await user.click(screen.getByRole("button", { name: /continue/i }));
+    await user.type(screen.getByLabelText(/邮箱/i), "test@example.com");
+    await user.click(screen.getByRole("button", { name: /继续/i }));
 
     await waitFor(() => {
       expect(screen.getByText("Rate limited")).toBeInTheDocument();
@@ -213,11 +192,11 @@ describe("LoginPage", () => {
 
   it("shows generic error when sendCode throws non-Error", async () => {
     mockSendCode.mockRejectedValueOnce("boom");
-    renderWithI18n(<LoginPage onSuccess={onSuccess} />);
+    render(<LoginPage onSuccess={onSuccess} />);
 
     const user = userEvent.setup();
-    await user.type(screen.getByLabelText(/email/i), "test@example.com");
-    await user.click(screen.getByRole("button", { name: /continue/i }));
+    await user.type(screen.getByLabelText(/邮箱/i), "test@example.com");
+    await user.click(screen.getByRole("button", { name: /继续/i }));
 
     await waitFor(() => {
       expect(
@@ -235,17 +214,17 @@ describe("LoginPage", () => {
     mockVerifyCode.mockResolvedValueOnce(undefined);
     mockApiListWorkspaces.mockResolvedValueOnce([{ id: "ws-1" }]);
 
-    renderWithI18n(<LoginPage onSuccess={onSuccess} />);
+    render(<LoginPage onSuccess={onSuccess} />);
 
     const user = userEvent.setup();
     // Step 1: email
-    await user.type(screen.getByLabelText(/email/i), "test@example.com");
-    await user.click(screen.getByRole("button", { name: /continue/i }));
+    await user.type(screen.getByLabelText(/邮箱/i), "test@example.com");
+    await user.click(screen.getByRole("button", { name: /继续/i }));
 
     // Step 2: code
     await waitFor(() => {
       expect(
-        screen.getByText(/check your email/i),
+        screen.getByText(/检查邮箱/i),
       ).toBeInTheDocument();
     });
 
@@ -272,15 +251,15 @@ describe("LoginPage", () => {
     mockSendCode.mockResolvedValueOnce(undefined);
     mockVerifyCode.mockRejectedValueOnce(new Error("Invalid code"));
 
-    renderWithI18n(<LoginPage onSuccess={onSuccess} />);
+    render(<LoginPage onSuccess={onSuccess} />);
 
     const user = userEvent.setup();
-    await user.type(screen.getByLabelText(/email/i), "test@example.com");
-    await user.click(screen.getByRole("button", { name: /continue/i }));
+    await user.type(screen.getByLabelText(/邮箱/i), "test@example.com");
+    await user.click(screen.getByRole("button", { name: /继续/i }));
 
     await waitFor(() => {
       expect(
-        screen.getByText(/check your email/i),
+        screen.getByText(/检查邮箱/i),
       ).toBeInTheDocument();
     });
 
@@ -299,49 +278,49 @@ describe("LoginPage", () => {
 
   it("disables resend button during cooldown", async () => {
     mockSendCode.mockResolvedValue(undefined);
-    renderWithI18n(<LoginPage onSuccess={onSuccess} />);
+    render(<LoginPage onSuccess={onSuccess} />);
 
     const user = userEvent.setup();
-    await user.type(screen.getByLabelText(/email/i), "test@example.com");
-    await user.click(screen.getByRole("button", { name: /continue/i }));
+    await user.type(screen.getByLabelText(/邮箱/i), "test@example.com");
+    await user.click(screen.getByRole("button", { name: /继续/i }));
 
     await waitFor(() => {
       expect(
-        screen.getByText(/check your email/i),
+        screen.getByText(/检查邮箱/i),
       ).toBeInTheDocument();
     });
 
     // After transitioning to code step, cooldown is 60s
-    const resendBtn = screen.getByRole("button", { name: /resend in/i });
+    const resendBtn = screen.getByRole("button", { name: /后重发/i });
     expect(resendBtn).toBeDisabled();
   });
 
   it("shows resend button with cooldown text after sending code", async () => {
     mockSendCode.mockResolvedValue(undefined);
     const user = userEvent.setup();
-    renderWithI18n(<LoginPage onSuccess={onSuccess} />);
+    render(<LoginPage onSuccess={onSuccess} />);
 
-    await user.type(screen.getByLabelText(/email/i), "test@example.com");
-    await user.click(screen.getByRole("button", { name: /continue/i }));
+    await user.type(screen.getByLabelText(/邮箱/i), "test@example.com");
+    await user.click(screen.getByRole("button", { name: /继续/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/check your email/i)).toBeInTheDocument();
+      expect(screen.getByText(/检查邮箱/i)).toBeInTheDocument();
     });
 
     // After transition, resend shows cooldown text and is disabled
-    expect(screen.getByText(/resend in/i)).toBeInTheDocument();
+    expect(screen.getByText(/后重发/i)).toBeInTheDocument();
   });
 
   it("calls sendCode again when resend is clicked after cooldown", async () => {
     mockSendCode.mockResolvedValue(undefined);
-    renderWithI18n(<LoginPage onSuccess={onSuccess} />);
+    render(<LoginPage onSuccess={onSuccess} />);
 
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    await user.type(screen.getByLabelText(/email/i), "test@example.com");
-    await user.click(screen.getByRole("button", { name: /continue/i }));
+    await user.type(screen.getByLabelText(/邮箱/i), "test@example.com");
+    await user.click(screen.getByRole("button", { name: /继续/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/check your email/i)).toBeInTheDocument();
+      expect(screen.getByText(/检查邮箱/i)).toBeInTheDocument();
     });
 
     // sendCode was called once for the initial send
@@ -356,10 +335,10 @@ describe("LoginPage", () => {
     }
 
     await waitFor(() => {
-      expect(screen.getByText(/resend code/i)).toBeInTheDocument();
+      expect(screen.getByText(/重新发送验证码/i)).toBeInTheDocument();
     });
 
-    const resendBtn = screen.getByRole("button", { name: /resend code/i });
+    const resendBtn = screen.getByRole("button", { name: /重新发送验证码/i });
     expect(resendBtn).not.toBeDisabled();
 
     await user.click(resendBtn);
@@ -378,14 +357,14 @@ describe("LoginPage", () => {
       />,
     );
     expect(
-      screen.getByRole("button", { name: /continue with google/i }),
+      screen.getByRole("button", { name: /使用 google 继续/i }),
     ).toBeInTheDocument();
   });
 
   it("hides Google OAuth button when google prop omitted", () => {
-    renderWithI18n(<LoginPage onSuccess={onSuccess} />);
+    render(<LoginPage onSuccess={onSuccess} />);
     expect(
-      screen.queryByRole("button", { name: /continue with google/i }),
+      screen.queryByRole("button", { name: /使用 google 继续/i }),
     ).not.toBeInTheDocument();
   });
 
@@ -413,15 +392,15 @@ describe("LoginPage", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText(/authorize cli/i),
+        screen.getByText(/授权\s*cli/i),
       ).toBeInTheDocument();
     });
     expect(screen.getByText(/user@example.com/)).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /authorize/i }),
+      screen.getByRole("button", { name: /授权/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /use a different account/i }),
+      screen.getByRole("button", { name: /使用其他账号/i }),
     ).toBeInTheDocument();
   });
 
@@ -447,12 +426,12 @@ describe("LoginPage", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText(/authorize cli/i),
+        screen.getByText(/授权\s*cli/i),
       ).toBeInTheDocument();
     });
 
     const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: /^authorize$/i }));
+    await user.click(screen.getByRole("button", { name: /^授权$/i }));
 
     expect(onTokenObtained).toHaveBeenCalled();
     expect(window.location.href).toContain(
@@ -480,17 +459,17 @@ describe("LoginPage", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText(/authorize cli/i),
+        screen.getByText(/授权\s*cli/i),
       ).toBeInTheDocument();
     });
 
     const user = userEvent.setup();
     await user.click(
-      screen.getByRole("button", { name: /use a different account/i }),
+      screen.getByRole("button", { name: /使用其他账号/i }),
     );
 
     expect(
-      screen.getByText(/sign in to multica/i),
+      screen.getByText(/进入\s*mortis/i),
     ).toBeInTheDocument();
   });
 
@@ -514,7 +493,7 @@ describe("LoginPage", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText(/authorize cli/i)).toBeInTheDocument();
+      expect(screen.getByText(/授权\s*cli/i)).toBeInTheDocument();
     });
     expect(screen.getByText(/cookie@example.com/)).toBeInTheDocument();
   });
@@ -538,11 +517,11 @@ describe("LoginPage", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText(/authorize cli/i)).toBeInTheDocument();
+      expect(screen.getByText(/授权\s*cli/i)).toBeInTheDocument();
     });
 
     const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: /^authorize$/i }));
+    await user.click(screen.getByRole("button", { name: /^授权$/i }));
 
     await waitFor(() => {
       expect(mockApiIssueCliToken).toHaveBeenCalled();
@@ -571,12 +550,12 @@ describe("LoginPage", () => {
     );
 
     const user = userEvent.setup();
-    await user.type(screen.getByLabelText(/email/i), "cli@example.com");
-    await user.click(screen.getByRole("button", { name: /continue/i }));
+    await user.type(screen.getByLabelText(/邮箱/i), "cli@example.com");
+    await user.click(screen.getByRole("button", { name: /继续/i }));
 
     await waitFor(() => {
       expect(
-        screen.getByText(/check your email/i),
+        screen.getByText(/检查邮箱/i),
       ).toBeInTheDocument();
     });
 
@@ -615,7 +594,7 @@ describe("LoginPage", () => {
   });
 
   it("does not render logo placeholder when omitted", () => {
-    renderWithI18n(<LoginPage onSuccess={onSuccess} />);
+    render(<LoginPage onSuccess={onSuccess} />);
     expect(screen.queryByTestId("custom-logo")).not.toBeInTheDocument();
   });
 
@@ -637,12 +616,12 @@ describe("LoginPage", () => {
     );
 
     const user = userEvent.setup();
-    await user.type(screen.getByLabelText(/email/i), "test@example.com");
-    await user.click(screen.getByRole("button", { name: /continue/i }));
+    await user.type(screen.getByLabelText(/邮箱/i), "test@example.com");
+    await user.click(screen.getByRole("button", { name: /继续/i }));
 
     await waitFor(() => {
       expect(
-        screen.getByText(/check your email/i),
+        screen.getByText(/检查邮箱/i),
       ).toBeInTheDocument();
     });
 
@@ -661,22 +640,22 @@ describe("LoginPage", () => {
 
   it("back button returns to email step", async () => {
     mockSendCode.mockResolvedValueOnce(undefined);
-    renderWithI18n(<LoginPage onSuccess={onSuccess} />);
+    render(<LoginPage onSuccess={onSuccess} />);
 
     const user = userEvent.setup();
-    await user.type(screen.getByLabelText(/email/i), "test@example.com");
-    await user.click(screen.getByRole("button", { name: /continue/i }));
+    await user.type(screen.getByLabelText(/邮箱/i), "test@example.com");
+    await user.click(screen.getByRole("button", { name: /继续/i }));
 
     await waitFor(() => {
       expect(
-        screen.getByText(/check your email/i),
+        screen.getByText(/检查邮箱/i),
       ).toBeInTheDocument();
     });
 
-    await user.click(screen.getByRole("button", { name: /back/i }));
+    await user.click(screen.getByRole("button", { name: /返回/i }));
 
     expect(
-      screen.getByText(/sign in to multica/i),
+      screen.getByText(/进入\s*mortis/i),
     ).toBeInTheDocument();
   });
 

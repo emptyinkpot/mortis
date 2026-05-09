@@ -22,25 +22,20 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@multica/core/auth";
 import { useLeaveWorkspace, useDeleteWorkspace } from "@multica/core/workspace/mutations";
 import { useWorkspaceId } from "@multica/core/hooks";
+import { useCurrentWorkspace } from "@multica/core/paths";
 import {
   memberListOptions,
   workspaceKeys,
   workspaceListOptions,
 } from "@multica/core/workspace/queries";
 import { api } from "@multica/core/api";
-import {
-  resolvePostAuthDestination,
-  useCurrentWorkspace,
-  useHasOnboarded,
-} from "@multica/core/paths";
+import { paths } from "@multica/core/paths";
 import { setCurrentWorkspace } from "@multica/core/platform";
 import type { Workspace } from "@multica/core/types";
 import { useNavigation } from "../../navigation";
 import { DeleteWorkspaceDialog } from "./delete-workspace-dialog";
-import { useT } from "../../i18n";
 
 export function WorkspaceTab() {
-  const { t } = useT("settings");
   const user = useAuthStore((s) => s.user);
   const workspace = useCurrentWorkspace();
   const wsId = useWorkspaceId();
@@ -49,7 +44,6 @@ export function WorkspaceTab() {
   const leaveWorkspace = useLeaveWorkspace();
   const deleteWorkspace = useDeleteWorkspace();
   const navigation = useNavigation();
-  const hasOnboarded = useHasOnboarded();
 
   /**
    * Send the user to a safe URL BEFORE the leave/delete mutation fires.
@@ -75,6 +69,7 @@ export function WorkspaceTab() {
     const cachedList =
       qc.getQueryData<Workspace[]>(workspaceListOptions().queryKey) ?? [];
     const remaining = cachedList.filter((w) => w.id !== workspace?.id);
+    const next = remaining[0];
     // Clear the workspace-context singleton BEFORE navigating and BEFORE
     // the mutation fires. Three downstream consumers read it:
     //  1. Realtime `workspace:deleted` handler's "current === deleted"
@@ -92,7 +87,9 @@ export function WorkspaceTab() {
     // takes over immediately, or the new-workspace overlay takes over
     // (which has no workspace context, so null is correct).
     setCurrentWorkspace(null, null);
-    navigation.push(resolvePostAuthDestination(remaining, hasOnboarded));
+    navigation.push(
+      next ? paths.workspace(next.slug).issues() : paths.newWorkspace(),
+    );
   };
 
   const [name, setName] = useState(workspace?.name ?? "");
@@ -137,9 +134,9 @@ export function WorkspaceTab() {
       qc.setQueryData(workspaceKeys.list(), (old: Workspace[] | undefined) =>
         old?.map((ws) => (ws.id === updated.id ? updated : ws)),
       );
-      toast.success(t(($) => $.workspace.toast_saved));
+      toast.success("工作区设置已保存");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : t(($) => $.workspace.toast_save_failed));
+      toast.error(e instanceof Error ? e.message : "保存工作区设置失败");
     } finally {
       setSaving(false);
     }
@@ -148,16 +145,18 @@ export function WorkspaceTab() {
   const handleLeaveWorkspace = () => {
     if (!workspace) return;
     setConfirmAction({
-      title: t(($) => $.workspace.leave_confirm_title),
-      description: t(($) => $.workspace.leave_confirm_description, { name: workspace.name }),
+      title: "退出工作区",
+      description: `确认退出 ${workspace.name} 吗？重新受邀前你将无法访问该工作区。`,
       variant: "destructive",
       onConfirm: async () => {
         setActionId("leave");
+        // Navigate away FIRST so the realtime handler's
+        // "current-workspace-deleted" branch doesn't race the mutation.
         navigateAwayFromCurrentWorkspace();
         try {
           await leaveWorkspace.mutateAsync(workspace.id);
         } catch (e) {
-          toast.error(e instanceof Error ? e.message : t(($) => $.workspace.toast_leave_failed));
+          toast.error(e instanceof Error ? e.message : "退出工作区失败");
         } finally {
           setActionId(null);
         }
@@ -177,7 +176,7 @@ export function WorkspaceTab() {
     try {
       await deleteWorkspace.mutateAsync(workspace.id);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : t(($) => $.workspace.toast_delete_failed));
+      toast.error(e instanceof Error ? e.message : "删除工作区失败");
     } finally {
       setActionId(null);
     }
@@ -189,12 +188,12 @@ export function WorkspaceTab() {
     <div className="space-y-8">
       {/* Workspace settings */}
       <section className="space-y-4">
-        <h2 className="text-sm font-semibold">{t(($) => $.workspace.section_general)}</h2>
+        <h2 className="text-sm font-semibold">常规</h2>
 
         <Card>
           <CardContent className="space-y-3">
             <div>
-              <Label className="text-xs text-muted-foreground">{t(($) => $.workspace.name_label)}</Label>
+              <Label className="text-xs text-muted-foreground">名称</Label>
               <Input
                 type="text"
                 value={name}
@@ -204,29 +203,29 @@ export function WorkspaceTab() {
               />
             </div>
             <div>
-              <Label className="text-xs text-muted-foreground">{t(($) => $.workspace.description_label)}</Label>
+              <Label className="text-xs text-muted-foreground">简介</Label>
               <Textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={3}
                 disabled={!canManageWorkspace}
                 className="mt-1 resize-none"
-                placeholder={t(($) => $.workspace.description_placeholder)}
+                placeholder="这个工作区主要处理什么？"
               />
             </div>
             <div>
-              <Label className="text-xs text-muted-foreground">{t(($) => $.workspace.context_label)}</Label>
+              <Label className="text-xs text-muted-foreground">上下文</Label>
               <Textarea
                 value={context}
                 onChange={(e) => setContext(e.target.value)}
                 rows={4}
                 disabled={!canManageWorkspace}
                 className="mt-1 resize-none"
-                placeholder={t(($) => $.workspace.context_placeholder)}
+                placeholder="供 AI 智能体理解该工作区的背景信息与上下文"
               />
             </div>
             <div>
-              <Label className="text-xs text-muted-foreground">{t(($) => $.workspace.slug_label)}</Label>
+              <Label className="text-xs text-muted-foreground">Slug</Label>
               <div className="mt-1 rounded-md border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
                 {workspace.slug}
               </div>
@@ -238,12 +237,12 @@ export function WorkspaceTab() {
                 disabled={saving || !name.trim() || !canManageWorkspace}
               >
                 <Save className="h-3 w-3" />
-                {saving ? t(($) => $.workspace.saving) : t(($) => $.workspace.save)}
+                {saving ? "保存中..." : "保存"}
               </Button>
             </div>
             {!canManageWorkspace && (
               <p className="text-xs text-muted-foreground">
-                {t(($) => $.workspace.manage_hint)}
+                只有管理员和所有者可以更新工作区设置。
               </p>
             )}
           </CardContent>
@@ -257,20 +256,20 @@ export function WorkspaceTab() {
       <section className="space-y-4">
         <div className="flex items-center gap-2">
           <LogOut className="h-4 w-4 text-muted-foreground" />
-          <h2 className="text-sm font-semibold">{t(($) => $.workspace.danger_zone)}</h2>
+          <h2 className="text-sm font-semibold">危险操作</h2>
         </div>
 
         <Card>
           <CardContent className="space-y-3">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-sm font-medium">{t(($) => $.workspace.leave_title)}</p>
+                <p className="text-sm font-medium">退出工作区</p>
                 <p className="text-xs text-muted-foreground">
                   {isSoleOwner
                     ? isSoleMember
-                      ? t(($) => $.workspace.leave_sole_member)
-                      : t(($) => $.workspace.leave_sole_owner)
-                    : t(($) => $.workspace.leave_default)}
+                      ? "你是唯一成员。如需离开，请先删除该工作区。"
+                      : "你是唯一所有者。请先将其他成员提升为所有者，或直接删除该工作区。"
+                    : "将你自己移出该工作区。"}
                 </p>
               </div>
               <Button
@@ -279,16 +278,16 @@ export function WorkspaceTab() {
                 onClick={handleLeaveWorkspace}
                 disabled={actionId === "leave" || isSoleOwner}
               >
-                {actionId === "leave" ? t(($) => $.workspace.leaving) : t(($) => $.workspace.leave_button)}
+                {actionId === "leave" ? "退出中..." : "退出工作区"}
               </Button>
             </div>
 
             {isOwner && (
               <div className="flex flex-col gap-2 border-t pt-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="text-sm font-medium text-destructive">{t(($) => $.workspace.delete_title)}</p>
+                  <p className="text-sm font-medium text-destructive">删除工作区</p>
                   <p className="text-xs text-muted-foreground">
-                    {t(($) => $.workspace.delete_description)}
+                    永久删除该工作区及其数据。
                   </p>
                 </div>
                 <Button
@@ -297,7 +296,7 @@ export function WorkspaceTab() {
                   onClick={() => setDeleteDialogOpen(true)}
                   disabled={actionId === "delete-workspace"}
                 >
-                  {actionId === "delete-workspace" ? t(($) => $.workspace.deleting) : t(($) => $.workspace.delete_button)}
+                  {actionId === "delete-workspace" ? "删除中..." : "删除工作区"}
                 </Button>
               </div>
             )}
@@ -313,7 +312,7 @@ export function WorkspaceTab() {
             <AlertDialogDescription>{confirmAction?.description}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{t(($) => $.workspace.confirm_cancel)}</AlertDialogCancel>
+            <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
               variant={confirmAction?.variant === "destructive" ? "destructive" : "default"}
               onClick={async () => {
@@ -321,7 +320,7 @@ export function WorkspaceTab() {
                 setConfirmAction(null);
               }}
             >
-              {t(($) => $.workspace.confirm_action)}
+              确认
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

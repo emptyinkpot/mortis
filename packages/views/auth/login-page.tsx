@@ -22,7 +22,6 @@ import { useAuthStore } from "@multica/core/auth";
 import { workspaceKeys } from "@multica/core/workspace/queries";
 import { api } from "@multica/core/api";
 import type { User } from "@multica/core/types";
-import { useT } from "../i18n";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -56,11 +55,6 @@ interface LoginPageProps {
   onTokenObtained?: () => void;
   /** Override Google login handler (e.g. desktop opens browser externally). When provided, renders the Google button even if `google` config is omitted. */
   onGoogleLogin?: () => void;
-  /** Slot rendered at the bottom of the sign-in card, below the
-   *  Google button. The web shell uses it for a "Prefer the desktop
-   *  app?" prompt; desktop omits it (a download prompt inside the app
-   *  would be absurd). */
-  extra?: ReactNode;
 }
 
 // ---------------------------------------------------------------------------
@@ -104,9 +98,7 @@ export function LoginPage({
   cliCallback,
   onTokenObtained,
   onGoogleLogin,
-  extra,
 }: LoginPageProps) {
-  const { t } = useT("auth");
   const qc = useQueryClient();
   const [step, setStep] = useState<"email" | "code" | "cli_confirm">("email");
   const [email, setEmail] = useState("");
@@ -166,7 +158,7 @@ export function LoginPage({
     async (e?: React.FormEvent) => {
       e?.preventDefault();
       if (!email) {
-        setError(t(($) => $.common.email_required));
+        setError("请输入邮箱");
         return;
       }
       setLoading(true);
@@ -180,13 +172,13 @@ export function LoginPage({
         setError(
           err instanceof Error
             ? err.message
-            : `${t(($) => $.errors.send_failed)} ${t(($) => $.errors.server_unreachable)}`,
+            : "发送验证码失败，请确认服务正在运行。",
         );
       } finally {
         setLoading(false);
       }
     },
-    [email, t],
+    [email],
   );
 
   const handleVerify = useCallback(
@@ -216,15 +208,13 @@ export function LoginPage({
         onSuccess();
       } catch (err) {
         setError(
-          err instanceof Error
-            ? err.message
-            : t(($) => $.errors.code_invalid),
+          err instanceof Error ? err.message : "验证码无效或已过期",
         );
         setCode("");
         setLoading(false);
       }
     },
-    [email, onSuccess, cliCallback, onTokenObtained, qc, t],
+    [email, onSuccess, cliCallback, onTokenObtained, qc],
   );
 
   const handleResend = async () => {
@@ -235,7 +225,7 @@ export function LoginPage({
       setCooldown(60);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : t(($) => $.errors.resend_failed),
+        err instanceof Error ? err.message : "重新发送验证码失败",
       );
     }
   };
@@ -261,7 +251,7 @@ export function LoginPage({
       onTokenObtained?.();
       redirectToCliCallback(cliCallback.url, token, cliCallback.state);
     } catch {
-      setError(t(($) => $.errors.cli_auth_failed));
+      setError("CLI 授权失败，请重新进入 Mortis。");
       setExistingUser(null);
       setStep("email");
       setLoading(false);
@@ -296,11 +286,13 @@ export function LoginPage({
         <Card className="w-full max-w-sm">
           <CardHeader className="text-center">
             {logo && <div className="mx-auto mb-4">{logo}</div>}
-            <CardTitle className="text-2xl">
-              {t(($) => $.cli.title)}
-            </CardTitle>
+            <CardTitle className="text-2xl">授权 CLI</CardTitle>
             <CardDescription>
-              {t(($) => $.cli.description, { email: existingUser.email })}
+              允许 CLI 以以下身份访问 Mortis：{" "}
+              <span className="font-medium text-foreground">
+                {existingUser.email}
+              </span>
+              ?
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
@@ -310,9 +302,7 @@ export function LoginPage({
               className="w-full"
               size="lg"
             >
-              {loading
-                ? t(($) => $.cli.authorizing)
-                : t(($) => $.cli.authorize)}
+              {loading ? "授权中..." : "授权"}
             </Button>
             <Button
               variant="ghost"
@@ -322,7 +312,7 @@ export function LoginPage({
                 setStep("email");
               }}
             >
-              {t(($) => $.cli.different_account)}
+              使用其他账号
             </Button>
           </CardContent>
         </Card>
@@ -340,11 +330,10 @@ export function LoginPage({
         <Card className="w-full max-w-sm">
           <CardHeader className="text-center">
             {logo && <div className="mx-auto mb-4">{logo}</div>}
-            <CardTitle className="text-2xl">
-              {t(($) => $.verify.title)}
-            </CardTitle>
+            <CardTitle className="text-2xl">检查邮箱</CardTitle>
             <CardDescription>
-              {t(($) => $.verify.description, { email })}
+              验证码已发送到{" "}
+              <span className="font-medium text-foreground">{email}</span>
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center gap-4">
@@ -376,9 +365,7 @@ export function LoginPage({
                 disabled={cooldown > 0}
                 className="text-primary underline-offset-4 hover:underline disabled:text-muted-foreground disabled:no-underline disabled:cursor-not-allowed"
               >
-                {cooldown > 0
-                  ? t(($) => $.verify.resend_cooldown, { seconds: cooldown })
-                  : t(($) => $.verify.resend)}
+                {cooldown > 0 ? `${cooldown}s 后重发` : "重新发送验证码"}
               </button>
             </div>
           </CardContent>
@@ -393,7 +380,7 @@ export function LoginPage({
                 setError("");
               }}
             >
-              {t(($) => $.common.back)}
+              返回
             </Button>
           </CardFooter>
         </Card>
@@ -410,21 +397,19 @@ export function LoginPage({
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
           {logo && <div className="mx-auto mb-4">{logo}</div>}
-          <CardTitle className="text-2xl">
-            {t(($) => $.signin.title)}
-          </CardTitle>
+          <CardTitle className="text-2xl">进入 Mortis</CardTitle>
           <CardDescription>
-            {t(($) => $.signin.description)}
+            输入你的邮箱以恢复私人工作区访问
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form id="login-form" onSubmit={handleSendCode} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="login-email">{t(($) => $.common.email)}</Label>
+              <Label htmlFor="login-email">邮箱</Label>
               <Input
                 id="login-email"
                 type="email"
-                placeholder={t(($) => $.common.email_placeholder)}
+                placeholder="you@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 autoFocus
@@ -444,9 +429,7 @@ export function LoginPage({
             size="lg"
             disabled={!email || loading}
           >
-            {loading
-              ? t(($) => $.signin.sending)
-              : t(($) => $.signin.continue)}
+            {loading ? "发送验证码中..." : "继续"}
           </Button>
           {(google || onGoogleLogin) && (
             <>
@@ -455,9 +438,7 @@ export function LoginPage({
                   <span className="w-full border-t" />
                 </div>
                 <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-card px-2 text-muted-foreground">
-                    {t(($) => $.signin.divider)}
-                  </span>
+                  <span className="bg-card px-2 text-muted-foreground">或</span>
                 </div>
               </div>
               <Button
@@ -486,11 +467,10 @@ export function LoginPage({
                     fill="#EA4335"
                   />
                 </svg>
-                {t(($) => $.signin.google)}
+                使用 Google 继续
               </Button>
             </>
           )}
-          {extra && <div className="w-full pt-1 text-center">{extra}</div>}
         </CardFooter>
       </Card>
     </div>

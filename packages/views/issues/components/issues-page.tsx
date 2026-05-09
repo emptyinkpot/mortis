@@ -22,10 +22,8 @@ import { IssuesHeader } from "./issues-header";
 import { BoardView } from "./board-view";
 import { ListView } from "./list-view";
 import { BatchActionToolbar } from "./batch-action-toolbar";
-import { useT } from "../../i18n";
 
 export function IssuesPage() {
-  const { t } = useT("issues");
   const wsId = useWorkspaceId();
   const { data: allIssues = [], isLoading: loading } = useQuery(issueListOptions(wsId));
 
@@ -39,7 +37,6 @@ export function IssuesPage() {
   const creatorFilters = useIssueViewStore((s) => s.creatorFilters);
   const projectFilters = useIssueViewStore((s) => s.projectFilters);
   const includeNoProject = useIssueViewStore((s) => s.includeNoProject);
-  const labelFilters = useIssueViewStore((s) => s.labelFilters);
 
   // Clear filter state when switching between workspaces (URL-driven).
   useClearFiltersOnWorkspaceChange(useIssueViewStore, wsId);
@@ -58,8 +55,8 @@ export function IssuesPage() {
   }, [allIssues, scope]);
 
   const issues = useMemo(
-    () => filterIssues(scopedIssues, { statusFilters, priorityFilters, assigneeFilters, includeNoAssignee, creatorFilters, projectFilters, includeNoProject, labelFilters }),
-    [scopedIssues, statusFilters, priorityFilters, assigneeFilters, includeNoAssignee, creatorFilters, projectFilters, includeNoProject, labelFilters],
+    () => filterIssues(scopedIssues, { statusFilters, priorityFilters, assigneeFilters, includeNoAssignee, creatorFilters, projectFilters, includeNoProject }),
+    [scopedIssues, statusFilters, priorityFilters, assigneeFilters, includeNoAssignee, creatorFilters, projectFilters, includeNoProject],
   );
 
   // Fetch sub-issue progress from the backend so counts are accurate
@@ -79,6 +76,13 @@ export function IssuesPage() {
   const updateIssueMutation = useUpdateIssue();
   const handleMoveIssue = useCallback(
     (issueId: string, newStatus: IssueStatus, newPosition?: number) => {
+      // Auto-switch to manual sort so drag ordering is preserved
+      const viewState = useIssueViewStore.getState();
+      if (viewState.sortBy !== "position") {
+        viewState.setSortBy("position");
+        viewState.setSortDirection("asc");
+      }
+
       const updates: Partial<{ status: IssueStatus; position: number }> = {
         status: newStatus,
       };
@@ -86,10 +90,10 @@ export function IssuesPage() {
 
       updateIssueMutation.mutate(
         { id: issueId, ...updates },
-        { onError: () => toast.error(t(($) => $.page.move_failed)) },
+        { onError: () => toast.error("移动事项失败") },
       );
     },
-    [updateIssueMutation, t],
+    [updateIssueMutation],
   );
 
   if (loading) {
@@ -138,10 +142,10 @@ export function IssuesPage() {
       <PageHeader className="gap-1.5">
         <WorkspaceAvatar name={workspace?.name ?? "W"} size="sm" />
         <span className="text-sm text-muted-foreground">
-          {workspace?.name ?? t(($) => $.page.breadcrumb_workspace_fallback)}
+          {workspace?.name ?? "工作区"}
         </span>
         <ChevronRight className="h-3 w-3 text-muted-foreground" />
-        <span className="text-sm font-medium">{t(($) => $.page.breadcrumb_title)}</span>
+        <span className="text-sm font-medium">事项</span>
       </PageHeader>
 
       <ViewStoreProvider store={useIssueViewStore}>
@@ -152,14 +156,15 @@ export function IssuesPage() {
         {scopedIssues.length === 0 ? (
           <div className="flex flex-1 min-h-0 flex-col items-center justify-center gap-2 text-muted-foreground">
             <ListTodo className="h-10 w-10 text-muted-foreground/40" />
-            <p className="text-sm">{t(($) => $.page.empty_title)}</p>
-            <p className="text-xs">{t(($) => $.page.empty_hint)}</p>
+            <p className="text-sm">还没有事项</p>
+            <p className="text-xs">创建一个事项即可开始。</p>
           </div>
         ) : (
           <div className="flex flex-col flex-1 min-h-0">
             {viewMode === "board" ? (
               <BoardView
                 issues={issues}
+                allIssues={scopedIssues}
                 visibleStatuses={visibleStatuses}
                 hiddenStatuses={hiddenStatuses}
                 onMoveIssue={handleMoveIssue}

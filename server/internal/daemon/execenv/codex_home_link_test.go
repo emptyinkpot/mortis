@@ -3,28 +3,8 @@ package execenv
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 )
-
-func assertDirLinkTarget(t *testing.T, dst, src string) {
-	t.Helper()
-
-	target, err := os.Readlink(dst)
-	if err == nil {
-		if target != src {
-			t.Errorf("link target = %q, want %q", target, src)
-		}
-		return
-	}
-	if runtime.GOOS == "windows" {
-		if fi, statErr := os.Stat(dst); statErr != nil || !fi.IsDir() {
-			t.Fatalf("expected accessible linked directory, stat err: %v", statErr)
-		}
-		return
-	}
-	t.Fatalf("Readlink: %v", err)
-}
 
 func TestEnsureDirSymlink_CreatesLink(t *testing.T) {
 	t.Parallel()
@@ -42,8 +22,14 @@ func TestEnsureDirSymlink_CreatesLink(t *testing.T) {
 		t.Fatal("expected source directory to be created")
 	}
 
-	// dst should resolve to src, or be an accessible junction on Windows.
-	assertDirLinkTarget(t, dst, src)
+	// dst should resolve to src.
+	target, err := os.Readlink(dst)
+	if err != nil {
+		t.Fatalf("Readlink: %v", err)
+	}
+	if target != src {
+		t.Errorf("link target = %q, want %q", target, src)
+	}
 }
 
 func TestEnsureDirSymlink_Idempotent(t *testing.T) {
@@ -60,7 +46,10 @@ func TestEnsureDirSymlink_Idempotent(t *testing.T) {
 		t.Fatalf("second call: %v", err)
 	}
 
-	assertDirLinkTarget(t, dst, src)
+	target, _ := os.Readlink(dst)
+	if target != src {
+		t.Errorf("link target = %q, want %q", target, src)
+	}
 }
 
 func TestEnsureDirSymlink_ReplacesWrongTarget(t *testing.T) {
@@ -72,18 +61,16 @@ func TestEnsureDirSymlink_ReplacesWrongTarget(t *testing.T) {
 	dst := filepath.Join(dir, "link")
 
 	os.MkdirAll(oldSrc, 0o755)
-	if err := os.Symlink(oldSrc, dst); err != nil {
-		if runtime.GOOS == "windows" {
-			t.Skipf("directory symlink unavailable on this Windows session: %v", err)
-		}
-		t.Fatalf("seed wrong symlink: %v", err)
-	}
+	os.Symlink(oldSrc, dst)
 
 	if err := ensureDirSymlink(newSrc, dst); err != nil {
 		t.Fatalf("ensureDirSymlink: %v", err)
 	}
 
-	assertDirLinkTarget(t, dst, newSrc)
+	target, _ := os.Readlink(dst)
+	if target != newSrc {
+		t.Errorf("link target = %q, want %q", target, newSrc)
+	}
 }
 
 func TestEnsureDirSymlink_SkipsExistingRegularDir(t *testing.T) {
@@ -121,7 +108,7 @@ func TestEnsureSymlink_SkipsWhenSourceMissing(t *testing.T) {
 	}
 }
 
-func TestEnsureSymlink_ReplacesStaleRegularFile(t *testing.T) {
+func TestEnsureSymlink_SkipsExistingRegularFile(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 
@@ -130,50 +117,14 @@ func TestEnsureSymlink_ReplacesStaleRegularFile(t *testing.T) {
 	os.WriteFile(src, []byte("new"), 0o644)
 	os.WriteFile(dst, []byte("old"), 0o644)
 
-	// Regression for issue #2081: a regular file at dst (e.g. left over from
-	// the Windows copy fallback in createFileLink) must be replaced so the
-	// per-task home picks up changes to the shared source — otherwise a
-	// once-stale auth.json never refreshes across env reuses.
 	if err := ensureSymlink(src, dst); err != nil {
 		t.Fatalf("ensureSymlink: %v", err)
 	}
 
-	data, err := os.ReadFile(dst)
-	if err != nil {
-		t.Fatalf("read dst: %v", err)
-	}
-	if string(data) != "new" {
-		t.Errorf("dst content = %q, want %q (file should be re-linked/re-copied from src)", data, "new")
-	}
-}
-
-func TestEnsureSymlink_RefreshesAfterCopyFallbackThenSrcChange(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-
-	src := filepath.Join(dir, "auth.json")
-	dst := filepath.Join(dir, "task-auth.json")
-
-	// Simulate the Windows copy fallback: first link is a copy of v1.
-	os.WriteFile(src, []byte(`{"refresh_token":"v1"}`), 0o644)
-	if err := copyFile(src, dst); err != nil {
-		t.Fatalf("seed copy fallback: %v", err)
-	}
-
-	// Shared source rotates to v2 (e.g. Codex Desktop refreshed the token).
-	os.WriteFile(src, []byte(`{"refresh_token":"v2"}`), 0o644)
-
-	// Reuse path runs ensureSymlink again — expected to refresh dst from src.
-	if err := ensureSymlink(src, dst); err != nil {
-		t.Fatalf("ensureSymlink: %v", err)
-	}
-
-	data, err := os.ReadFile(dst)
-	if err != nil {
-		t.Fatalf("read dst: %v", err)
-	}
-	if string(data) != `{"refresh_token":"v2"}` {
-		t.Errorf("dst content after refresh = %q, want v2 contents", data)
+	// Should not be replaced.
+	data, _ := os.ReadFile(dst)
+	if string(data) != "old" {
+		t.Errorf("existing file content changed to %q", data)
 	}
 }
 

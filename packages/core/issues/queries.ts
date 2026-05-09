@@ -1,11 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { api } from "../api";
-import type {
-  IssueStatus,
-  ListIssuesParams,
-  ListIssuesCache,
-} from "../types";
-import { BOARD_STATUSES } from "./config";
+import type { ListIssuesParams } from "../types";
 
 export const issueKeys = {
   all: (wsId: string) => ["issues", wsId] as const,
@@ -21,70 +16,40 @@ export const issueKeys = {
     [...issueKeys.all(wsId), "children", id] as const,
   childProgress: (wsId: string) =>
     [...issueKeys.all(wsId), "child-progress"] as const,
-  /** Full-issue timeline (single TanStack Query, no cursor). */
-  timeline: (issueId: string) =>
-    ["issues", "timeline", issueId] as const,
+  timeline: (issueId: string) => ["issues", "timeline", issueId] as const,
   reactions: (issueId: string) => ["issues", "reactions", issueId] as const,
   subscribers: (issueId: string) =>
     ["issues", "subscribers", issueId] as const,
   usage: (issueId: string) => ["issues", "usage", issueId] as const,
-  /** Per-issue task list (issue-detail Execution log section). */
-  tasks: (issueId: string) => ["issues", "tasks", issueId] as const,
-  /** Prefix-match key for invalidating tasks across all issues — used by
-   *  the global WS task: prefix path so any task lifecycle event refreshes
-   *  every per-issue list, regardless of which issue is currently mounted. */
-  tasksAll: () => ["issues", "tasks"] as const,
 };
 
-export type MyIssuesFilter = Pick<
-  ListIssuesParams,
-  "assignee_id" | "assignee_ids" | "creator_id" | "project_id"
->;
+export type MyIssuesFilter = Pick<ListIssuesParams, "assignee_id" | "assignee_ids" | "creator_id">;
 
-/** Page size per status column. */
-export const ISSUE_PAGE_SIZE = 50;
-
-/** Statuses the issues/my-issues pages paginate. Cancelled is intentionally excluded — it has never been surfaced in the list/board views. */
-export const PAGINATED_STATUSES: readonly IssueStatus[] = BOARD_STATUSES;
-
-/** Flatten a bucketed response to a single Issue[] for consumers that want the whole list. */
-export function flattenIssueBuckets(data: ListIssuesCache) {
-  const out = [];
-  for (const status of PAGINATED_STATUSES) {
-    const bucket = data.byStatus[status];
-    if (bucket) out.push(...bucket.issues);
-  }
-  return out;
-}
-
-async function fetchFirstPages(filter: MyIssuesFilter = {}): Promise<ListIssuesCache> {
-  const responses = await Promise.all(
-    PAGINATED_STATUSES.map((status) =>
-      api.listIssues({ status, limit: ISSUE_PAGE_SIZE, offset: 0, ...filter }),
-    ),
-  );
-  const byStatus: ListIssuesCache["byStatus"] = {};
-  PAGINATED_STATUSES.forEach((status, i) => {
-    const res = responses[i]!;
-    byStatus[status] = { issues: res.issues, total: res.total };
-  });
-  return { byStatus };
-}
+export const CLOSED_PAGE_SIZE = 50;
 
 /**
- * CACHE SHAPE NOTE: The raw cache stores {@link ListIssuesCache} (buckets keyed
- * by status, each with `{ issues, total }`), and `select` flattens it to
- * `Issue[]` for consumers. Mutations and ws-updaters must use
- * `setQueryData<ListIssuesCache>(...)` and preserve the byStatus shape.
+ * CACHE SHAPE NOTE: The raw cache stores ListIssuesResponse ({ issues, total, doneTotal }),
+ * but `select` transforms it to Issue[] for consumers. Mutations and ws-updaters
+ * must use setQueryData<ListIssuesResponse>(...) — NOT setQueryData<Issue[]>.
  *
- * Fetches the first page of each paginated status in parallel. Use
- * {@link useLoadMoreByStatus} to paginate a specific status into the cache.
+ * Fetches all open issues + first page of done issues. Use useLoadMoreDoneIssues()
+ * to paginate additional done items into the cache.
  */
 export function issueListOptions(wsId: string) {
   return queryOptions({
     queryKey: issueKeys.list(wsId),
-    queryFn: () => fetchFirstPages(),
-    select: flattenIssueBuckets,
+    queryFn: async () => {
+      const [openRes, closedRes] = await Promise.all([
+        api.listIssues({ open_only: true }),
+        api.listIssues({ status: "done", limit: CLOSED_PAGE_SIZE, offset: 0 }),
+      ]);
+      return {
+        issues: [...openRes.issues, ...closedRes.issues],
+        total: openRes.total + closedRes.total,
+        doneTotal: closedRes.total,
+      };
+    },
+    select: (data) => data.issues,
   });
 }
 
@@ -99,8 +64,23 @@ export function myIssueListOptions(
 ) {
   return queryOptions({
     queryKey: issueKeys.myList(wsId, scope, filter),
-    queryFn: () => fetchFirstPages(filter),
-    select: flattenIssueBuckets,
+    queryFn: async () => {
+      const [openRes, closedRes] = await Promise.all([
+        api.listIssues({ open_only: true, ...filter }),
+        api.listIssues({
+          status: "done",
+          limit: CLOSED_PAGE_SIZE,
+          offset: 0,
+          ...filter,
+        }),
+      ]);
+      return {
+        issues: [...openRes.issues, ...closedRes.issues],
+        total: openRes.total + closedRes.total,
+        doneTotal: closedRes.total,
+      };
+    },
+    select: (data) => data.issues,
   });
 }
 
@@ -132,13 +112,6 @@ export function childIssuesOptions(wsId: string, id: string) {
   });
 }
 
-/**
- * Single-fetch timeline options. The endpoint returns the full ordered set of
- * comments + activities for an issue (server caps at 2000 as a safety net).
- * Cursor pagination was removed in #1929 — at observed data sizes (p99 ~30
- * entries per issue) it added complexity without a UX win and broke reply
- * threads at page boundaries.
- */
 export function issueTimelineOptions(issueId: string) {
   return queryOptions({
     queryKey: issueKeys.timeline(issueId),

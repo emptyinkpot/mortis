@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@multica/ui/lib/utils";
-import { useT } from "../../i18n";
 
 // ---------------------------------------------------------------------------
 // Lightbox — full-screen image preview (ESC or click backdrop to close)
@@ -56,7 +55,6 @@ function ImageLightbox({
 // ---------------------------------------------------------------------------
 
 function ImageView({ node, editor, selected, deleteNode }: NodeViewProps) {
-  const { t } = useT("editor");
   const src = node.attrs.src as string;
   const alt = (node.attrs.alt as string) || "";
   const title = node.attrs.title as string | undefined;
@@ -77,9 +75,9 @@ function ImageView({ node, editor, selected, deleteNode }: NodeViewProps) {
   const handleCopyLink = async () => {
     try {
       await navigator.clipboard.writeText(src);
-      toast.success(t(($) => $.image.link_copied));
+      toast.success("Link copied");
     } catch {
-      toast.error(t(($) => $.image.copy_link_failed));
+      toast.error("Failed to copy link");
     }
   };
 
@@ -106,16 +104,16 @@ function ImageView({ node, editor, selected, deleteNode }: NodeViewProps) {
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
           >
-            <button type="button" onClick={handleView} title={t(($) => $.image.view)}>
+            <button type="button" onClick={handleView} title="View image">
               <Maximize2 className="size-3.5" />
             </button>
-            <button type="button" onClick={handleDownload} title={t(($) => $.image.download)}>
+            <button type="button" onClick={handleDownload} title="Download">
               <Download className="size-3.5" />
             </button>
             <button
               type="button"
               onClick={handleCopyLink}
-              title={t(($) => $.image.copy_link)}
+              title="Copy link"
             >
               <LinkIcon className="size-3.5" />
             </button>
@@ -123,7 +121,7 @@ function ImageView({ node, editor, selected, deleteNode }: NodeViewProps) {
               <button
                 type="button"
                 onClick={() => deleteNode()}
-                title={t(($) => $.image.delete)}
+                title="Delete"
               >
                 <Trash2 className="size-3.5" />
               </button>

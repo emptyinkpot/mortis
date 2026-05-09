@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "last_verified_at": "2026-05-06T11:12:00+08:00",
+  "purpose": "Canonical private mapping for blog, OpenList, and real netdisk storage. This file exists to prevent confusing a server directory with an OpenList-mounted netdisk again.",
+  "critical_boundary": {
+    "server_directory_is_not_netdisk": true,
+    "do_not_call_blog_public_data_a_netdisk": true,
+    "real_netdisk_writes_must_go_through_openlist_api": true,
+    "local_export_cache_is_only_cache": true
+  },
+  "blog": {
+    "domain": "blog.tengokukk.com",
+    "nginx_config": "/etc/nginx/sites-available/myblog.conf",
+    "document_root": "/srv/myblog/site",
+    "public_data_dir": "/srv/myblog/public-data",
+    "note": "/srv/myblog/public-data is a server/blog data directory. It may be useful for static blog assets, but it is not the OpenList-mounted netdisk."
+  },
+  "openlist": {
+    "public_url": "https://blog.tengokukk.com/openlist/",
+    "internal_api_base_url_for_mortis_backend": "http://172.18.0.1:5244/openlist",
+    "host_api_base_url": "http://127.0.0.1:5244/openlist",
+    "container_name": "openlist",
+    "image": "openlistteam/openlist:latest",
+    "compose_file": "/srv/openlist/docker-compose.yml",
+    "host_port": 5244,
+    "container_port": 5244,
+    "host_data_dir": "/srv/openlist/data",
+    "container_data_dir": "/opt/openlist/data",
+    "config_file": "/srv/openlist/data/config.json",
+    "database_file": "/srv/openlist/data/data.db",
+    "site_url": "https://blog.tengokukk.com/openlist",
+    "api_base_path": "/openlist"
+  },
+  "openlist_storage_mounts": [
+    {
+      "mount_path": "/夸克网盘",
+      "driver": "Quark",
+      "remark": "Quark Netdisk",
+      "status": "work",
+      "source_table": "x_storages",
+      "write_policy": "Use OpenList API. Do not write to a local host directory and call it netdisk."
+    }
+  ],
+  "mortis_ai_society_export": {
+    "real_netdisk_remote_dir": "/夸克网盘/Mortis-AI-Society",
+    "verified_probe_file": "/夸克网盘/Mortis-AI-Society/_probe.json",
+    "verified_probe_result": "OpenList API mkdir, put, and list returned code=200 success.",
+    "local_cache_host_dir": "/srv/multica/openlist-export",
+    "local_cache_container_dir": "/app/openlist-export",
+    "local_cache_note": "This cache is allowed for diagnostics/retry only. The durable user-facing destination is the real OpenList remote dir above."
+  },
+  "mortis_env": {
+    "MORTIS_OPENLIST_API_URL": "http://172.18.0.1:5244/openlist",
+    "MORTIS_OPENLIST_REMOTE_DIR": "/夸克网盘/Mortis-AI-Society",
+    "MORTIS_OPENLIST_EXPORT_HOST_DIR": "/srv/multica/openlist-export",
+    "MORTIS_OPENLIST_EXPORT_DIR": "/app/openlist-export",
+    "MORTIS_OPENLIST_TOKEN": {
+      "source": "sudo docker exec openlist sh -lc './openlist admin token --data /opt/openlist/data 2>/dev/null'",
+      "storage": "/srv/multica/.env",
+      "redacted": true
+    }
+  },
+  "openlist_api_examples": {
+    "get_admin_token": "sudo docker exec openlist sh -lc './openlist admin token --data /opt/openlist/data 2>/dev/null'",
+    "mkdir_remote_dir": "curl -X POST http://127.0.0.1:5244/openlist/api/fs/mkdir -H 'Authorization: <token>' -H 'Content-Type: application/json' -d '{\"path\":\"/夸克网盘/Mortis-AI-Society\"}'",
+    "upload_file": "curl -X PUT http://127.0.0.1:5244/openlist/api/fs/put -H 'Authorization: <token>' -H 'File-Path: /夸克网盘/Mortis-AI-Society/example.json' -H 'Content-Type: application/octet-stream' --data-binary @example.json",
+    "list_remote_dir": "curl -X POST http://127.0.0.1:5244/openlist/api/fs/list -H 'Authorization: <token>' -H 'Content-Type: application/json' -d '{\"path\":\"/夸克网盘/Mortis-AI-Society\",\"page\":1,\"per_page\":20,\"refresh\":true}'"
+  },
+  "anti_mistake_rules": [
+    "If the user says OpenList netdisk, write through OpenList API to an OpenList storage mount path such as /夸克网盘/..., not to /srv/myblog/public-data.",
+    "If a path starts with /srv/myblog or /srv/multica, treat it as a server path/cache unless OpenList storage explicitly maps it.",
+    "Verify OpenList storage mounts from /srv/openlist/data/data.db table x_storages before choosing a remote destination.",
+    "Verify successful netdisk writes by listing the remote path with /openlist/api/fs/list.",
+    "Never print the OpenList token in normal reports."
+  ]
+}

@@ -57,4 +57,26 @@ _features/
 server/server
 data/
 .kilo
-.idea
+
+# Mortis agent coordination runtime state
+.runtime/claims/**
+.runtime/timeline/**/*.jsonl
+.runtime/agents/**
+.runtime/artifacts/**/*.json
+.runtime/locks/**
+.runtime/events/**/*.json
+.runtime/mailboxes/**
+!.runtime/README.md
+!.runtime/**/.gitkeep
+
+# Mortis generated runtime directories
+agent-workspaces/
+openlist-export/
+codex-home/
+!.runtime/events/.gitkeep
+!.runtime/mailboxes/.gitkeep
+!.runtime/artifacts/.gitkeep
+!.runtime/timeline/.gitkeep
+!.runtime/claims/.gitkeep
+!.runtime/agents/.gitkeep
+!.runtime/locks/.gitkeep

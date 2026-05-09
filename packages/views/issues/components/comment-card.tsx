@@ -1,7 +1,7 @@
 "use client";
 
-import { memo, useCallback, useRef, useState } from "react";
-import { CheckCircle2, ChevronRight, Copy, Download, FileText, MoreHorizontal, Pencil, RotateCcw, Trash2 } from "lucide-react";
+import { useCallback, useRef, useState } from "react";
+import { ChevronRight, Copy, Download, FileText, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@multica/ui/components/ui/card";
 import { Button } from "@multica/ui/components/ui/button";
@@ -37,7 +37,6 @@ import { api } from "@multica/core/api";
 import { ReplyInput } from "./reply-input";
 import type { TimelineEntry, Attachment } from "@multica/core/types";
 import { useCommentCollapseStore } from "@multica/core/issues/stores";
-import { useT } from "../../i18n";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -46,35 +45,12 @@ import { useT } from "../../i18n";
 interface CommentCardProps {
   issueId: string;
   entry: TimelineEntry;
-  /**
-   * Flat list of every nested reply under this thread root, in render order.
-   * Computed once in `issue-detail.tsx`'s `timelineView` and stabilized so
-   * the array reference only changes when *this* thread's replies change —
-   * an unrelated thread receiving a new reply must NOT bust this card's
-   * memo. Passing the full Map here used to do exactly that.
-   */
-  replies: TimelineEntry[];
+  allReplies: Map<string, TimelineEntry[]>;
   currentUserId?: string;
-  /**
-   * True when the current user is a workspace owner/admin and can therefore
-   * moderate comments authored by anyone — restoring the admin override that
-   * the backend already grants at `comment.go:507-512`. Computed once in
-   * `issue-detail.tsx` and threaded down so neither this component nor
-   * `CommentRow` has to rerun the rule per row.
-   */
-  canModerate?: boolean;
   onReply: (parentId: string, content: string, attachmentIds?: string[]) => Promise<void>;
   onEdit: (commentId: string, content: string) => Promise<void>;
   onDelete: (commentId: string) => void;
   onToggleReaction: (commentId: string, emoji: string) => void;
-  /** Toggle the resolved state on the thread root. Only invoked for root entries. */
-  onResolveToggle?: (commentId: string, resolved: boolean) => void;
-  /**
-   * When non-null, the thread root is currently rendered as a resolved-but-
-   * expanded card. Pass a "Collapse" affordance into the header so the user
-   * can fold the thread back to the bar; the parent owns the session state.
-   */
-  onCollapseResolved?: () => void;
   /** ID of the comment to highlight (flash animation). */
   highlightedCommentId?: string | null;
 }
@@ -94,22 +70,21 @@ function DeleteCommentDialog({
   onConfirm: () => void;
   hasReplies?: boolean;
 }) {
-  const { t } = useT("issues");
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>{t(($) => $.comment.delete_title)}</AlertDialogTitle>
+          <AlertDialogTitle>删除评论</AlertDialogTitle>
           <AlertDialogDescription>
             {hasReplies
-              ? t(($) => $.comment.delete_desc_with_replies)
-              : t(($) => $.comment.delete_desc)}
+              ? "该评论及其所有回复将被永久删除，此操作无法撤销。"
+              : "该评论将被永久删除，此操作无法撤销。"}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>{t(($) => $.comment.cancel_action)}</AlertDialogCancel>
+          <AlertDialogCancel>取消</AlertDialogCancel>
           <AlertDialogAction variant="destructive" onClick={onConfirm}>
-            {t(($) => $.comment.delete_action)}
+            删除
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -178,7 +153,6 @@ function CommentRow({
   issueId,
   entry,
   currentUserId,
-  canModerate = false,
   onEdit,
   onDelete,
   onToggleReaction,
@@ -186,12 +160,10 @@ function CommentRow({
   issueId: string;
   entry: TimelineEntry;
   currentUserId?: string;
-  canModerate?: boolean;
   onEdit: (commentId: string, content: string) => Promise<void>;
   onDelete: (commentId: string) => void;
   onToggleReaction: (commentId: string, emoji: string) => void;
 }) {
-  const { t } = useT("issues");
   const { getActorName } = useActorName();
   const [editing, setEditing] = useState(false);
   const editEditorRef = useRef<ContentEditorRef>(null);
@@ -203,8 +175,6 @@ function CommentRow({
   });
 
   const isOwn = entry.actor_type === "member" && entry.actor_id === currentUserId;
-  const canEditEntry = isOwn || (canModerate && entry.actor_type === "member");
-  const canDeleteEntry = isOwn || canModerate;
   const isTemp = entry.id.startsWith("temp-");
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -232,7 +202,7 @@ function CommentRow({
       await onEdit(entry.id, trimmed);
       setEditing(false);
     } catch {
-      toast.error(t(($) => $.comment.update_failed));
+      toast.error("更新评论失败");
     }
   };
 
@@ -243,8 +213,8 @@ function CommentRow({
   return (
     <div className={`py-3${isTemp ? " opacity-60" : ""}`}>
       <div className="flex items-center gap-2.5">
-        <ActorAvatar actorType={entry.actor_type} actorId={entry.actor_id} size={24} enableHoverCard showStatusDot />
-        <span className="cursor-pointer text-sm font-medium">
+        <ActorAvatar actorType={entry.actor_type} actorId={entry.actor_id} size={24} />
+        <span className="text-sm font-medium">
           {getActorName(entry.actor_type, entry.actor_id)}
         </span>
         <Tooltip>
@@ -277,27 +247,23 @@ function CommentRow({
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => {
                 copyMarkdown(entry.content ?? "");
-                toast.success(t(($) => $.comment.copied_toast));
+                toast.success("已复制");
               }}>
                 <Copy className="h-3.5 w-3.5" />
-                {t(($) => $.comment.copy_action)}
+                复制
               </DropdownMenuItem>
-              {(canEditEntry || canDeleteEntry) && (
+              {isOwn && (
                 <>
                   <DropdownMenuSeparator />
-                  {canEditEntry && (
-                    <DropdownMenuItem onClick={startEdit}>
-                      <Pencil className="h-3.5 w-3.5" />
-                      {t(($) => $.comment.edit_action)}
-                    </DropdownMenuItem>
-                  )}
-                  {canEditEntry && canDeleteEntry && <DropdownMenuSeparator />}
-                  {canDeleteEntry && (
-                    <DropdownMenuItem onClick={() => setConfirmDelete(true)} variant="destructive">
-                      <Trash2 className="h-3.5 w-3.5" />
-                      {t(($) => $.comment.delete_action)}
-                    </DropdownMenuItem>
-                  )}
+                  <DropdownMenuItem onClick={startEdit}>
+                    <Pencil className="h-3.5 w-3.5" />
+                    编辑
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setConfirmDelete(true)} variant="destructive">
+                    <Trash2 className="h-3.5 w-3.5" />
+                    删除
+                  </DropdownMenuItem>
                 </>
               )}
             </DropdownMenuContent>
@@ -321,11 +287,10 @@ function CommentRow({
             <ContentEditor
               ref={editEditorRef}
               defaultValue={entry.content ?? ""}
-              placeholder={t(($) => $.comment.edit_placeholder)}
+              placeholder="编辑评论..."
               onSubmit={saveEdit}
               onUploadFile={(file) => uploadWithToast(file, { issueId })}
               debounceMs={100}
-              currentIssueId={issueId}
             />
           </div>
           <div className="flex items-center justify-between mt-2">
@@ -334,8 +299,8 @@ function CommentRow({
               onSelect={(file) => editEditorRef.current?.uploadFile(file)}
             />
             <div className="flex items-center gap-2">
-              <Button size="sm" variant="ghost" onClick={cancelEdit}>{t(($) => $.comment.cancel_edit)}</Button>
-              <Button size="sm" variant="outline" onClick={saveEdit}>{t(($) => $.comment.save_action)}</Button>
+              <Button size="sm" variant="ghost" onClick={cancelEdit}>取消</Button>
+              <Button size="sm" variant="outline" onClick={saveEdit}>保存</Button>
             </div>
           </div>
           {isDragOver && <FileDropOverlay />}
@@ -366,21 +331,17 @@ function CommentRow({
 // CommentCard — One Card per thread (parent + all replies flat inside)
 // ---------------------------------------------------------------------------
 
-function CommentCardImpl({
+function CommentCard({
   issueId,
   entry,
-  replies,
+  allReplies,
   currentUserId,
-  canModerate = false,
   onReply,
   onEdit,
   onDelete,
   onToggleReaction,
-  onResolveToggle,
-  onCollapseResolved,
   highlightedCommentId,
 }: CommentCardProps) {
-  const { t } = useT("issues");
   const { getActorName } = useActorName();
   const { uploadWithToast } = useFileUpload(api);
   const isCollapsed = useCommentCollapseStore((s) => s.isCollapsed(issueId, entry.id));
@@ -396,12 +357,6 @@ function CommentCardImpl({
   });
 
   const isOwn = entry.actor_type === "member" && entry.actor_id === currentUserId;
-  // Author-only edit is the same as before; admins additionally get edit
-  // *and* delete on member-authored comments, plus delete on agent-authored
-  // ones. Edit on agent comments is intentionally never offered — agents
-  // own their own outputs.
-  const canEditEntry = isOwn || (canModerate && entry.actor_type === "member");
-  const canDeleteEntry = isOwn || canModerate;
   const isTemp = entry.id.startsWith("temp-");
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -429,14 +384,20 @@ function CommentCardImpl({
       await onEdit(entry.id, trimmed);
       setEditing(false);
     } catch {
-      toast.error(t(($) => $.comment.update_failed));
+      toast.error("更新评论失败");
     }
   };
 
-  // The parent precomputes the flat thread (using collectThreadReplies),
-  // memoizes by thread, and stabilizes the array reference, so we render
-  // straight from `replies` instead of re-walking the graph on every render.
-  const allNestedReplies = replies;
+  // Collect all nested replies recursively into a flat list
+  const allNestedReplies: TimelineEntry[] = [];
+  const collectReplies = (parentId: string) => {
+    const children = allReplies.get(parentId) ?? [];
+    for (const child of children) {
+      allNestedReplies.push(child);
+      collectReplies(child.id);
+    }
+  };
+  collectReplies(entry.id);
 
   const replyCount = allNestedReplies.length;
   const contentPreview = (entry.content ?? "").replace(/\n/g, " ").slice(0, 80);
@@ -448,20 +409,6 @@ function CommentCardImpl({
 
   return (
     <Card className={cn("!py-0 !gap-0 overflow-hidden transition-colors duration-700", isTemp && "opacity-60", isHighlighted && "ring-2 ring-brand/50 bg-brand/5")}>
-      {onCollapseResolved && (
-        <button
-          type="button"
-          onClick={onCollapseResolved}
-          className="flex w-full items-center justify-between border-b border-border/50 px-4 py-2.5 text-left text-sm text-muted-foreground hover:bg-muted/50 transition-colors"
-          aria-label={t(($) => $.comment.resolve.collapse)}
-        >
-          <span className="flex items-center gap-2">
-            <CheckCircle2 className="h-3.5 w-3.5" />
-            {t(($) => $.comment.resolve.collapse)}
-          </span>
-          <ChevronRight className="h-3.5 w-3.5 -rotate-90" />
-        </button>
-      )}
       <Collapsible open={open} onOpenChange={handleOpenChange}>
         {/* Header — always visible, acts as toggle */}
         <div className="px-4 py-3">
@@ -469,8 +416,8 @@ function CommentCardImpl({
             <CollapsibleTrigger className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
               <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-90")} />
             </CollapsibleTrigger>
-            <ActorAvatar actorType={entry.actor_type} actorId={entry.actor_id} size={24} enableHoverCard showStatusDot />
-            <span className="shrink-0 cursor-pointer text-sm font-medium">
+            <ActorAvatar actorType={entry.actor_type} actorId={entry.actor_id} size={24} />
+            <span className="shrink-0 text-sm font-medium">
               {getActorName(entry.actor_type, entry.actor_id)}
             </span>
             <Tooltip>
@@ -493,7 +440,7 @@ function CommentCardImpl({
             )}
             {!open && replyCount > 0 && (
               <span className="shrink-0 text-xs text-muted-foreground">
-                {t(($) => $.comment.reply_count, { count: replyCount })}
+                {replyCount} {replyCount === 1 ? "reply" : "replies"}
               </span>
             )}
 
@@ -514,45 +461,23 @@ function CommentCardImpl({
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem onClick={() => {
                     copyMarkdown(entry.content ?? "");
-                    toast.success(t(($) => $.comment.copied_toast));
+                    toast.success("已复制");
                   }}>
                     <Copy className="h-3.5 w-3.5" />
-                    {t(($) => $.comment.copy_action)}
+                    复制
                   </DropdownMenuItem>
-                  {onResolveToggle && (
+                  {isOwn && (
                     <>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={() => onResolveToggle(entry.id, !entry.resolved_at)}>
-                        {entry.resolved_at ? (
-                          <>
-                            <RotateCcw className="h-3.5 w-3.5" />
-                            {t(($) => $.comment.resolve.unresolve_action)}
-                          </>
-                        ) : (
-                          <>
-                            <CheckCircle2 className="h-3.5 w-3.5" />
-                            {t(($) => $.comment.resolve.resolve_action)}
-                          </>
-                        )}
+                      <DropdownMenuItem onClick={startEdit}>
+                        <Pencil className="h-3.5 w-3.5" />
+                        编辑
                       </DropdownMenuItem>
-                    </>
-                  )}
-                  {(canEditEntry || canDeleteEntry) && (
-                    <>
                       <DropdownMenuSeparator />
-                      {canEditEntry && (
-                        <DropdownMenuItem onClick={startEdit}>
-                          <Pencil className="h-3.5 w-3.5" />
-                          {t(($) => $.comment.edit_action)}
-                        </DropdownMenuItem>
-                      )}
-                      {canEditEntry && canDeleteEntry && <DropdownMenuSeparator />}
-                      {canDeleteEntry && (
-                        <DropdownMenuItem onClick={() => setConfirmDelete(true)} variant="destructive">
-                          <Trash2 className="h-3.5 w-3.5" />
-                          {t(($) => $.comment.delete_action)}
-                        </DropdownMenuItem>
-                      )}
+                      <DropdownMenuItem onClick={() => setConfirmDelete(true)} variant="destructive">
+                        <Trash2 className="h-3.5 w-3.5" />
+                        删除
+                      </DropdownMenuItem>
                     </>
                   )}
                 </DropdownMenuContent>
@@ -582,11 +507,10 @@ function CommentCardImpl({
                   <ContentEditor
                     ref={editEditorRef}
                     defaultValue={entry.content ?? ""}
-                    placeholder={t(($) => $.comment.edit_placeholder)}
+                    placeholder="编辑评论..."
                     onSubmit={saveEdit}
                     onUploadFile={(file) => uploadWithToast(file, { issueId })}
                     debounceMs={100}
-                    currentIssueId={issueId}
                   />
                 </div>
                 <div className="flex items-center justify-between mt-2">
@@ -595,8 +519,8 @@ function CommentCardImpl({
                     onSelect={(file) => editEditorRef.current?.uploadFile(file)}
                   />
                   <div className="flex items-center gap-2">
-                    <Button size="sm" variant="ghost" onClick={cancelEdit}>{t(($) => $.comment.cancel_edit)}</Button>
-                    <Button size="sm" variant="outline" onClick={saveEdit}>{t(($) => $.comment.save_action)}</Button>
+                    <Button size="sm" variant="ghost" onClick={cancelEdit}>取消</Button>
+                    <Button size="sm" variant="outline" onClick={saveEdit}>保存</Button>
                   </div>
                 </div>
                 {parentDragOver && <FileDropOverlay />}
@@ -628,7 +552,6 @@ function CommentCardImpl({
                 issueId={issueId}
                 entry={reply}
                 currentUserId={currentUserId}
-                canModerate={canModerate}
                 onEdit={onEdit}
                 onDelete={onDelete}
                 onToggleReaction={onToggleReaction}
@@ -640,7 +563,7 @@ function CommentCardImpl({
           <div className="border-t border-border/50 px-4 py-2.5">
             <ReplyInput
               issueId={issueId}
-              placeholder={t(($) => $.reply.placeholder)}
+              placeholder="写下回复..."
               size="sm"
               avatarType="member"
               avatarId={currentUserId ?? ""}
@@ -652,12 +575,5 @@ function CommentCardImpl({
     </Card>
   );
 }
-
-// Memoized so a long timeline (e.g. Inbox-embedded IssueDetail with thousands
-// of comments) does not re-render every card on each parent state update or
-// WS-driven cache refresh. Default shallow comparison is sufficient: the
-// timeline grouping is useMemo'd in issue-detail.tsx (stable Map ref), and
-// every callback is stabilized via useCallback in use-issue-timeline.ts.
-const CommentCard = memo(CommentCardImpl);
 
 export { CommentCard, type CommentCardProps };

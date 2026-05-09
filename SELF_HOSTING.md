@@ -1,6 +1,28 @@
+---
+title: Self-Hosting Guide
+status: canonical-supporting
+audience: self-host operators
+scope: generic self-host setup
+---
+
 # Self-Hosting Guide
 
 Deploy Multica on your own infrastructure in minutes.
+
+> Scope note: this document explains the repository-supported generic self-host path.
+> It is not the source of truth for the current Mortis private production deployment.
+> For the current Mortis-branded private runtime facts, use
+> `MORTIS_PRIVATE_DEPLOYMENT_NOTES.md`.
+
+## Role In The Doc Stack
+
+- `README.md` defines current project truth, boundaries, and entrypoints
+- `project.json` is the machine-readable project entry
+- `SELF_HOSTING.md` explains the generic self-host workflow supported by this repo
+- `MORTIS_PRIVATE_DEPLOYMENT_NOTES.md` records the current Mortis private runtime facts
+
+If these documents disagree about the current Mortis production deployment,
+prefer `README.md`, `project.json`, and `MORTIS_PRIVATE_DEPLOYMENT_NOTES.md`.
 
 ## Architecture
 
@@ -24,9 +46,9 @@ curl -fsSL https://raw.githubusercontent.com/multica-ai/multica/main/scripts/ins
 multica setup self-host
 ```
 
-This installs the `multica` CLI, checks out the latest self-host assets, pulls the official Multica images from GHCR, and configures everything for localhost.
+This clones the repository, starts all services via Docker Compose, installs the `multica` CLI, then configures it for localhost.
 
-Open http://localhost:3000. To log in, configure `RESEND_API_KEY` in `.env` for email-based codes (recommended), or leave Resend unset and copy the generated code from the backend logs. See [Step 2 — Log In](#step-2--log-in) for details.
+Open http://localhost:3000. To log in, configure `RESEND_API_KEY` in `.env` for email-based codes (recommended), or set `APP_ENV=development` in `.env` to enable the dev master code **`888888`**. See [Step 2 — Log In](#step-2--log-in) for details.
 
 > **Prerequisites:** Docker and Docker Compose must be installed. The script checks for this and provides install links if missing.
 >
@@ -37,6 +59,19 @@ Open http://localhost:3000. To log in, configure `RESEND_API_KEY` in `.env` for 
 > ```
 
 ---
+
+## Current Boundary
+
+This guide documents the repo-supported self-host baseline:
+
+- Docker Compose file: `docker-compose.selfhost.yml`
+- Default backend port: `8080`
+- Default frontend port: `3000`
+- Default database service: PostgreSQL 17 with pgvector
+- Standard operator entry: `make selfhost`
+
+It does not redefine the current Mortis private deployment ports, domains, host,
+or runtime directory. Those belong in `MORTIS_PRIVATE_DEPLOYMENT_NOTES.md`.
 
 ## Step-by-Step Setup (Alternative)
 
@@ -54,10 +89,6 @@ make selfhost
 
 `make selfhost` automatically creates `.env` from the example, generates a random `JWT_SECRET`, and starts all services via Docker Compose.
 
-By default it pulls the latest stable release images from GHCR. To build the backend/web from your current checkout instead, run `make selfhost-build`.
-If the selected GHCR tag has not been published yet, `make selfhost` now tells you to fall back to `make selfhost-build`.
-`make selfhost-build` uses local `multica-backend:dev` / `multica-web:dev` tags, so it does not overwrite the pulled `:latest` images.
-
 Once ready:
 
 - **Frontend:** http://localhost:3000
@@ -67,15 +98,13 @@ Once ready:
 
 ### Step 2 — Log In
 
-Open http://localhost:3000 in your browser. The Docker self-host stack defaults to `APP_ENV=production` (set in `docker-compose.selfhost.yml`), and there is no fixed verification code by default. Pick one of the following to log in:
+Open http://localhost:3000 in your browser. The Docker self-host stack defaults to `APP_ENV=production` (set in `docker-compose.selfhost.yml`), so the dev master code is **disabled by default** for safety on public deployments. Pick one of the following to log in:
 
 - **Recommended (production):** configure `RESEND_API_KEY` in `.env`, then restart the backend. Real verification codes will be sent to the email address you enter. See [Advanced Configuration → Email](SELF_HOSTING_ADVANCED.md#email-required-for-authentication).
-- **Without email configured:** the verification code is generated server-side and printed to the backend container logs (look for `[DEV] Verification code for ...:`). Useful for one-off testing on a single machine.
-- **Deterministic local/private testing:** set `APP_ENV=development` and `MULTICA_DEV_VERIFICATION_CODE=888888` in `.env`, then restart the backend. This fixed code is ignored when `APP_ENV=production`.
+- **Evaluation / private network:** set `APP_ENV=development` in `.env` and restart the backend. Verification code **`888888`** will then work for any email address.
+- **Without configuring either:** the verification code is generated server-side and printed to the backend container logs (look for `[DEV] Verification code for ...:`). Useful for one-off testing on a single machine.
 
-Changes to `ALLOW_SIGNUP` and `GOOGLE_CLIENT_ID` also take effect after restarting the backend / compose stack. The web UI reads both from `/api/config` at runtime, so no web rebuild is needed.
-
-> **Warning:** do **not** set `MULTICA_DEV_VERIFICATION_CODE` on a publicly reachable instance — anyone who knows an email address can then log in with that fixed code.
+> **Warning:** do **not** set `APP_ENV=development` on a publicly reachable instance — anyone who knows an email address can then log in with `888888`.
 
 ### Step 3 — Install CLI & Start Daemon
 
@@ -92,15 +121,12 @@ brew install multica-ai/tap/multica
 You also need at least one AI agent CLI installed:
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (`claude` on PATH)
 - [Codex](https://github.com/openai/codex) (`codex` on PATH)
-- [GitHub Copilot CLI](https://docs.github.com/en/copilot) (`copilot` on PATH)
 - [OpenClaw](https://github.com/openclaw/openclaw) (`openclaw` on PATH)
 - [OpenCode](https://github.com/anomalyco/opencode) (`opencode` on PATH)
 - [Hermes](https://github.com/NousResearch/hermes) (`hermes` on PATH)
 - Gemini (`gemini` on PATH)
 - [Pi](https://pi.dev/) (`pi` on PATH)
 - [Cursor Agent](https://cursor.com/) (`cursor-agent` on PATH)
-- Kimi (`kimi` on PATH)
-- Kiro CLI (`kiro-cli` on PATH)
 
 ### b) One-command setup
 
@@ -165,15 +191,14 @@ This reconfigures the CLI for multica.ai, re-authenticates, and restarts the dae
 
 > Your local Docker services are unaffected. Stop them separately if you no longer need them.
 
-## Upgrading
+## Rebuilding After Updates
 
 ```bash
-docker compose -f docker-compose.selfhost.yml pull
-docker compose -f docker-compose.selfhost.yml up -d
+git pull
+make selfhost
 ```
 
-Pin `MULTICA_IMAGE_TAG` in `.env` to an exact version like `v0.2.4` if you want to stay on a specific release. Migrations run automatically on backend startup.
-If the selected GHCR tag has not been published yet, fall back to `make selfhost-build` or `docker compose -f docker-compose.selfhost.yml -f docker-compose.selfhost.build.yml up -d --build`.
+Migrations run automatically on backend startup.
 
 ---
 
@@ -196,7 +221,6 @@ JWT_SECRET=$(openssl rand -hex 32)
 Then start everything:
 
 ```bash
-docker compose -f docker-compose.selfhost.yml pull
 docker compose -f docker-compose.selfhost.yml up -d
 ```
 
@@ -228,3 +252,14 @@ multica daemon start
 ## Advanced Configuration
 
 For environment variables, manual setup (without Docker), reverse proxy configuration, database setup, and more, see the [Advanced Configuration Guide](SELF_HOSTING_ADVANCED.md).
+
+## Relationship To Mortis Private Deployment
+
+Use this guide when you want to:
+
+- spin up a fresh self-host instance from the repo
+- understand the supported local Docker topology
+- configure a new generic self-host environment
+
+Do not use this guide alone to infer the current Mortis production runtime.
+For the live Mortis private deployment, use `MORTIS_PRIVATE_DEPLOYMENT_NOTES.md`.

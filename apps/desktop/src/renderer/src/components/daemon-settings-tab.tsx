@@ -1,13 +1,7 @@
-import { useState, useEffect, useCallback, type ReactNode } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@multica/ui/components/ui/button";
 import { Switch } from "@multica/ui/components/ui/switch";
-import { cn } from "@multica/ui/lib/utils";
-import type { DaemonPrefs, DaemonStatus } from "../../../shared/daemon-types";
-import {
-  DAEMON_STATE_COLORS,
-  DAEMON_STATE_LABELS,
-  formatUptime,
-} from "../../../shared/daemon-types";
+import type { DaemonPrefs } from "../../../shared/daemon-types";
 
 function SettingRow({
   label,
@@ -16,7 +10,7 @@ function SettingRow({
 }: {
   label: string;
   description: string;
-  children: ReactNode;
+  children: React.ReactNode;
 }) {
   return (
     <div className="flex items-center justify-between gap-6 py-4">
@@ -29,44 +23,14 @@ function SettingRow({
   );
 }
 
-// One row inside the diagnostics block. Values that are likely to be
-// long IDs / URLs render as monospaced + truncated with a tooltip.
-function DiagnosticsRow({
-  label,
-  value,
-  mono,
-}: {
-  label: string;
-  value: ReactNode;
-  mono?: boolean;
-}) {
-  return (
-    <div className="grid grid-cols-[140px_minmax(0,1fr)] items-baseline gap-3 py-1.5">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <span
-        className={cn(
-          "min-w-0 truncate text-sm",
-          mono && "font-mono text-xs",
-        )}
-        title={typeof value === "string" ? value : undefined}
-      >
-        {value}
-      </span>
-    </div>
-  );
-}
-
 export function DaemonSettingsTab() {
   const [prefs, setPrefs] = useState<DaemonPrefs>({ autoStart: true, autoStop: false });
   const [cliInstalled, setCliInstalled] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
-  const [status, setStatus] = useState<DaemonStatus>({ state: "stopped" });
 
   useEffect(() => {
     window.daemonAPI.getPrefs().then(setPrefs);
     window.daemonAPI.isCliInstalled().then(setCliInstalled);
-    window.daemonAPI.getStatus().then(setStatus);
-    return window.daemonAPI.onStatusChange(setStatus);
   }, []);
 
   const updatePref = useCallback(
@@ -81,15 +45,15 @@ export function DaemonSettingsTab() {
 
   return (
     <div>
-      <h2 className="text-lg font-semibold">Daemon</h2>
+      <h2 className="text-lg font-semibold">守护进程</h2>
       <p className="text-sm text-muted-foreground mt-1">
-        Configure how the local agent daemon behaves with the desktop app.
+        配置桌面端如何管理本地 Agent 守护进程。
       </p>
 
       <div className="mt-6 divide-y">
         <SettingRow
-          label="Auto-start on launch"
-          description="Automatically start the daemon when the app opens and you are logged in."
+          label="启动应用时自动启动"
+          description="当应用打开且你已登录时，自动启动守护进程。"
         >
           <Switch
             checked={prefs.autoStart}
@@ -99,8 +63,8 @@ export function DaemonSettingsTab() {
         </SettingRow>
 
         <SettingRow
-          label="Auto-stop on quit"
-          description="Stop the daemon when the desktop app is closed. Disable this to keep the daemon running in the background."
+          label="退出应用时自动停止"
+          description="关闭桌面应用时停止守护进程。关闭此项可让守护进程继续在后台运行。"
         >
           <Switch
             checked={prefs.autoStop}
@@ -110,13 +74,13 @@ export function DaemonSettingsTab() {
         </SettingRow>
 
         <div className="py-4">
-          <p className="text-sm font-medium">CLI Status</p>
+          <p className="text-sm font-medium">CLI 状态</p>
           <p className="text-sm text-muted-foreground mt-1">
             {cliInstalled === null
-              ? "Checking…"
+              ? "检测中…"
               : cliInstalled
-                ? "multica CLI is installed and available in PATH."
-                : "multica CLI not found. Install it to enable daemon management."}
+                ? "multica CLI 已安装，并可在 PATH 中直接调用。"
+                : "未找到 multica CLI。安装后才能启用守护进程管理。"}
           </p>
           {cliInstalled === false && (
             <Button
@@ -129,71 +93,9 @@ export function DaemonSettingsTab() {
                 )
               }
             >
-              Installation Guide
+              安装说明
             </Button>
           )}
-        </div>
-      </div>
-
-      {/* Diagnostics — moved out of the logs panel so the panel can focus
-          on logs. These fields matter for support tickets and bug reports,
-          not for everyday use. */}
-      <div className="mt-8">
-        <h3 className="text-sm font-semibold">Diagnostics</h3>
-        <p className="text-xs text-muted-foreground mt-1">
-          Identification and connection details. Useful when filing a bug
-          report or investigating why a runtime isn&apos;t showing up.
-        </p>
-        <div className="mt-3 rounded-lg border bg-muted/20 px-4 py-2">
-          <DiagnosticsRow
-            label="State"
-            value={
-              <span className="inline-flex items-center gap-1.5">
-                <span
-                  className={cn(
-                    "size-1.5 rounded-full",
-                    DAEMON_STATE_COLORS[status.state],
-                  )}
-                />
-                {DAEMON_STATE_LABELS[status.state]}
-              </span>
-            }
-          />
-          <DiagnosticsRow
-            label="Uptime"
-            value={status.uptime ? formatUptime(status.uptime) : "—"}
-          />
-          <DiagnosticsRow
-            label="PID"
-            value={status.pid ?? "—"}
-            mono={!!status.pid}
-          />
-          <DiagnosticsRow
-            label="Daemon ID"
-            value={status.daemonId ?? "—"}
-            mono={!!status.daemonId}
-          />
-          <DiagnosticsRow
-            label="Profile"
-            value={status.profile || "default"}
-          />
-          <DiagnosticsRow
-            label="Server URL"
-            value={status.serverUrl ?? "—"}
-            mono={!!status.serverUrl}
-          />
-          <DiagnosticsRow
-            label="Device name"
-            value={status.deviceName ?? "—"}
-          />
-          <DiagnosticsRow
-            label="Workspaces"
-            value={
-              typeof status.workspaceCount === "number"
-                ? status.workspaceCount
-                : "—"
-            }
-          />
         </div>
       </div>
     </div>

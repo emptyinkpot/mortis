@@ -119,7 +119,7 @@ func TestBuildInvitationParams_SubjectStripsControls(t *testing.T) {
 	if strings.ContainsAny(p.Subject, "\r\n\t") {
 		t.Errorf("subject still contains control characters: %q", p.Subject)
 	}
-	if p.Subject != "Alice invited you to Acme on Multica" {
+	if p.Subject != "Alice invited you to Acme on Mortis" {
 		t.Errorf("unexpected subject: %q", p.Subject)
 	}
 }

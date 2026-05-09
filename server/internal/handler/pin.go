@@ -3,16 +3,13 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/protocol"
 )
 
-// PinnedItemResponse carries pin metadata only. Title / status / identifier /
-// icon are intentionally NOT included — clients derive them from their own
-// issue / project query cache so that an `issue:updated` event flows naturally
-// into the sidebar without needing a cross-entity invalidate on `pinKeys`.
 type PinnedItemResponse struct {
 	ID          string  `json:"id"`
 	WorkspaceID string  `json:"workspace_id"`
@@ -21,6 +18,11 @@ type PinnedItemResponse struct {
 	ItemID      string  `json:"item_id"`
 	Position    float64 `json:"position"`
 	CreatedAt   string  `json:"created_at"`
+	// Enriched fields (set by list endpoint)
+	Title      string  `json:"title"`
+	Identifier *string `json:"identifier,omitempty"`
+	Icon       *string `json:"icon,omitempty"`
+	Status     string  `json:"status,omitempty"`
 }
 
 func pinnedItemToResponse(p db.PinnedItem) PinnedItemResponse {
@@ -65,10 +67,33 @@ func (h *Handler) ListPins(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Enrich with item details
 	resp := make([]PinnedItemResponse, 0, len(pins))
 	for _, p := range pins {
-		resp = append(resp, pinnedItemToResponse(p))
+		pr := pinnedItemToResponse(p)
+		switch p.ItemType {
+		case "issue":
+			issue, err := h.Queries.GetIssue(r.Context(), p.ItemID)
+			if err != nil {
+				continue // Skip deleted items
+			}
+			pr.Title = issue.Title
+			prefix := h.getIssuePrefix(r.Context(), issue.WorkspaceID)
+			identifier := formatIdentifier(prefix, issue.Number)
+			pr.Identifier = &identifier
+			pr.Status = issue.Status
+		case "project":
+			project, err := h.Queries.GetProject(r.Context(), p.ItemID)
+			if err != nil {
+				continue // Skip deleted items
+			}
+			pr.Title = project.Title
+			pr.Icon = textToPtr(project.Icon)
+			pr.Status = project.Status
+		}
+		resp = append(resp, pr)
 	}
+
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -93,27 +118,18 @@ func (h *Handler) CreatePin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	itemUUID, ok := parseUUIDOrBadRequest(w, req.ItemID, "item_id")
-	if !ok {
-		return
-	}
-	wsUUID, ok := parseUUIDOrBadRequest(w, workspaceID, "workspace id")
-	if !ok {
-		return
-	}
-
 	// Verify the item exists in this workspace
 	switch req.ItemType {
 	case "issue":
 		if _, err := h.Queries.GetIssueInWorkspace(r.Context(), db.GetIssueInWorkspaceParams{
-			ID: itemUUID, WorkspaceID: wsUUID,
+			ID: parseUUID(req.ItemID), WorkspaceID: parseUUID(workspaceID),
 		}); err != nil {
 			writeError(w, http.StatusNotFound, "issue not found")
 			return
 		}
 	case "project":
 		if _, err := h.Queries.GetProjectInWorkspace(r.Context(), db.GetProjectInWorkspaceParams{
-			ID: itemUUID, WorkspaceID: wsUUID,
+			ID: parseUUID(req.ItemID), WorkspaceID: parseUUID(workspaceID),
 		}); err != nil {
 			writeError(w, http.StatusNotFound, "project not found")
 			return
@@ -122,7 +138,7 @@ func (h *Handler) CreatePin(w http.ResponseWriter, r *http.Request) {
 
 	// Get max position to append at end
 	maxPos, err := h.Queries.GetMaxPinnedItemPosition(r.Context(), db.GetMaxPinnedItemPositionParams{
-		WorkspaceID: wsUUID,
+		WorkspaceID: parseUUID(workspaceID),
 		UserID:      parseUUID(userID),
 	})
 	if err != nil {
@@ -131,10 +147,10 @@ func (h *Handler) CreatePin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pin, err := h.Queries.CreatePinnedItem(r.Context(), db.CreatePinnedItemParams{
-		WorkspaceID: wsUUID,
+		WorkspaceID: parseUUID(workspaceID),
 		UserID:      parseUUID(userID),
 		ItemType:    req.ItemType,
-		ItemID:      itemUUID,
+		ItemID:      parseUUID(req.ItemID),
 		Position:    maxPos + 1,
 	})
 	if err != nil {
@@ -160,20 +176,11 @@ func (h *Handler) DeletePin(w http.ResponseWriter, r *http.Request) {
 	itemType := chi.URLParam(r, "itemType")
 	itemID := chi.URLParam(r, "itemId")
 
-	wsUUID, ok := parseUUIDOrBadRequest(w, workspaceID, "workspace id")
-	if !ok {
-		return
-	}
-	itemUUID, ok := parseUUIDOrBadRequest(w, itemID, "item id")
-	if !ok {
-		return
-	}
-
 	err := h.Queries.DeletePinnedItem(r.Context(), db.DeletePinnedItemParams{
-		WorkspaceID: wsUUID,
+		WorkspaceID: parseUUID(workspaceID),
 		UserID:      parseUUID(userID),
 		ItemType:    itemType,
-		ItemID:      itemUUID,
+		ItemID:      parseUUID(itemID),
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete pin")
@@ -200,20 +207,11 @@ func (h *Handler) ReorderPins(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	wsUUID, ok := parseUUIDOrBadRequest(w, workspaceID, "workspace id")
-	if !ok {
-		return
-	}
-
 	for _, item := range req.Items {
-		itemUUID, ok := parseUUIDOrBadRequest(w, item.ID, "items[].id")
-		if !ok {
-			return
-		}
 		if err := h.Queries.UpdatePinnedItemPosition(r.Context(), db.UpdatePinnedItemPositionParams{
 			Position:    item.Position,
-			ID:          itemUUID,
-			WorkspaceID: wsUUID,
+			ID:          parseUUID(item.ID),
+			WorkspaceID: parseUUID(workspaceID),
 			UserID:      parseUUID(userID),
 		}); err != nil {
 			writeError(w, http.StatusInternalServerError, "failed to reorder pins")
@@ -221,10 +219,12 @@ func (h *Handler) ReorderPins(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Fan out so other sessions (web/desktop, or a second tab) refetch
-	// the pin list and pick up the new order. Without this, reorder is
-	// only consistent on the originating client until a hard refresh.
-	h.publish(protocol.EventPinReordered, workspaceID, "member", userID, map[string]any{"items": req.Items})
-
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func formatIdentifier(prefix string, number int32) string {
+	if prefix == "" {
+		prefix = "ISS"
+	}
+	return prefix + "-" + strconv.Itoa(int(number))
 }

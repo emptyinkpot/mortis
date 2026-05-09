@@ -1,20 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
+  Loader2,
+  Save,
+  Plus,
+  Trash2,
   Eye,
   EyeOff,
-  Loader2,
   Lock,
-  Plus,
-  Save,
-  Trash2,
 } from "lucide-react";
 import type { Agent } from "@multica/core/types";
+import { Badge } from "@multica/ui/components/ui/badge";
 import { Button } from "@multica/ui/components/ui/button";
 import { Input } from "@multica/ui/components/ui/input";
+import { Label } from "@multica/ui/components/ui/label";
 import { toast } from "sonner";
-import { useT } from "../../../i18n";
+import {
+  buildAgentEnvSummary,
+  getRecommendedEnvPresets,
+} from "../../agent-env-summary";
 
 let nextEnvId = 0;
 
@@ -47,16 +52,15 @@ function entriesToEnvMap(entries: EnvEntry[]): Record<string, string> {
 
 export function EnvTab({
   agent,
+  runtimeProvider,
   readOnly = false,
   onSave,
-  onDirtyChange,
 }: {
   agent: Agent;
+  runtimeProvider?: string | null;
   readOnly?: boolean;
   onSave: (updates: Partial<Agent>) => Promise<void>;
-  onDirtyChange?: (dirty: boolean) => void;
 }) {
-  const { t } = useT("agents");
   const [envEntries, setEnvEntries] = useState<EnvEntry[]>(
     envMapToEntries(agent.custom_env ?? {}),
   );
@@ -64,18 +68,47 @@ export function EnvTab({
 
   const currentEnvMap = entriesToEnvMap(envEntries);
   const originalEnvMap = agent.custom_env ?? {};
+  const envSummary = buildAgentEnvSummary(
+    currentEnvMap,
+    runtimeProvider,
+    readOnly,
+  );
+  const recommendedPresets = getRecommendedEnvPresets(runtimeProvider);
   const dirty =
     JSON.stringify(currentEnvMap) !== JSON.stringify(originalEnvMap);
-
-  useEffect(() => {
-    onDirtyChange?.(dirty);
-  }, [dirty, onDirtyChange]);
 
   const addEnvEntry = () => {
     setEnvEntries([
       ...envEntries,
       { id: nextEnvId++, key: "", value: "", visible: true },
     ]);
+  };
+
+  const ensureEnvEntry = (key: string) => {
+    const normalized = key.trim();
+    if (!normalized) {
+      return;
+    }
+
+    const existingIndex = envEntries.findIndex(
+      (entry) => entry.key.trim().toUpperCase() === normalized.toUpperCase(),
+    );
+
+    if (existingIndex >= 0) {
+      setEnvEntries(
+        envEntries.map((entry, index) =>
+          index === existingIndex ? { ...entry, visible: true } : entry,
+        ),
+      );
+      toast.success(`${normalized} 已存在，已展开可编辑`);
+      return;
+    }
+
+    setEnvEntries([
+      ...envEntries,
+      { id: nextEnvId++, key: normalized, value: "", visible: true },
+    ]);
+    toast.success(`已添加 ${normalized}`);
   };
 
   const removeEnvEntry = (index: number) => {
@@ -106,16 +139,16 @@ export function EnvTab({
     const keys = envEntries.filter((e) => e.key.trim()).map((e) => e.key.trim());
     const uniqueKeys = new Set(keys);
     if (uniqueKeys.size < keys.length) {
-      toast.error(t(($) => $.tab_body.env.duplicate_keys_toast));
+      toast.error("环境变量键重复");
       return;
     }
 
     setSaving(true);
     try {
       await onSave({ custom_env: currentEnvMap });
-      toast.success(t(($) => $.tab_body.env.saved_toast));
+      toast.success("环境变量已保存");
     } catch {
-      toast.error(t(($) => $.tab_body.env.save_failed_toast));
+      toast.error("保存环境变量失败");
     } finally {
       setSaving(false);
     }
@@ -123,10 +156,43 @@ export function EnvTab({
 
   if (readOnly) {
     return (
-      <div className="space-y-4">
-        <p className="text-xs text-muted-foreground">
-          {t(($) => $.tab_body.env.intro_readonly)}
-        </p>
+      <div className="max-w-lg space-y-4">
+        <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-medium text-foreground">Key 来源摘要</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                只显示 provider、键名和遮罩信息，不回显明文 secret。
+              </p>
+            </div>
+            <Badge variant="outline">{envSummary.providerLabel}</Badge>
+          </div>
+          <p className="text-xs text-muted-foreground">{envSummary.sourceHint}</p>
+          <div className="space-y-1">
+            <Label className="text-[11px] text-muted-foreground">已配置 key 槽位</Label>
+            {envSummary.keySlots.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {envSummary.keySlots.map((slot) => (
+                  <Badge key={slot.key} variant="secondary" className="font-mono">
+                    {slot.key}
+                  </Badge>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground italic">
+                当前未在 custom_env 中检测到 API key。
+              </p>
+            )}
+          </div>
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">
+            环境变量
+          </Label>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            启动时注入到智能体进程中。变量值已隐藏，只有智能体所有者或工作区管理员可以查看和编辑。
+          </p>
+        </div>
         {envEntries.length > 0 ? (
           <div className="space-y-2">
             {envEntries.map((entry) => (
@@ -134,55 +200,119 @@ export function EnvTab({
                 <Input
                   value={entry.key}
                   readOnly
-                  className="w-[40%] bg-muted font-mono text-xs"
+                  className="w-[40%] font-mono text-xs bg-muted"
                 />
                 <div className="relative flex-1">
                   <Input
                     type="password"
                     value="****"
                     readOnly
-                    className="bg-muted pr-8 font-mono text-xs"
+                    className="pr-8 font-mono text-xs bg-muted"
                   />
-                  <Lock className="absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <Lock className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                 </div>
               </div>
             ))}
           </div>
         ) : (
-          <p className="text-xs italic text-muted-foreground">
-            {t(($) => $.tab_body.env.empty_readonly)}
-          </p>
+          <p className="text-xs text-muted-foreground italic">未配置环境变量。</p>
         )}
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-xs text-muted-foreground">
-          {t(($) => $.tab_body.env.intro_prefix)}
-          <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">
-            {"ANTHROPIC_API_KEY"}
-          </code>
-          {t(($) => $.tab_body.env.intro_separator)}
-          <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">
-            {"ANTHROPIC_BASE_URL"}
-          </code>
-          {t(($) => $.tab_body.env.intro_suffix)}
-        </p>
+    <div className="max-w-lg space-y-4">
+      <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-medium text-foreground">Key 来源摘要</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              这里显示当前 provider 与已配置的 key 槽位；完整值仍只在输入框里可见。
+            </p>
+          </div>
+          <Badge variant="outline">{envSummary.providerLabel}</Badge>
+        </div>
+        <p className="text-xs text-muted-foreground">{envSummary.sourceHint}</p>
+        <div className="space-y-1">
+          <Label className="text-[11px] text-muted-foreground">
+            {envSummary.keySlots.length <= 1 ? "当前 key 槽位" : "候选 key 槽位"}
+          </Label>
+          {envSummary.keySlots.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {envSummary.keySlots.map((slot) => (
+                <Badge key={slot.key} variant="secondary" className="gap-1.5 font-mono">
+                  <span>{slot.key}</span>
+                  {slot.fingerprint ? (
+                    <span className="text-[10px] text-muted-foreground">
+                      {slot.fingerprint}
+                    </span>
+                  ) : null}
+                </Badge>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground italic">
+              当前未在 custom_env 中检测到 API key。
+            </p>
+          )}
+        </div>
+        {envSummary.relatedConfigKeys.length > 0 ? (
+          <div className="space-y-1">
+            <Label className="text-[11px] text-muted-foreground">相关配置</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {envSummary.relatedConfigKeys.map((key) => (
+                <Badge key={key} variant="outline" className="font-mono">
+                  {key}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </div>
+      <div className="space-y-2">
+        <div>
+          <Label className="text-xs text-muted-foreground">快捷预设</Label>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            按当前 provider 推荐常见 key 槽位；点击后会自动插入到下方列表。
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {recommendedPresets.map((preset) => (
+            <Button
+              key={preset.key}
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs font-mono"
+              onClick={() => ensureEnvEntry(preset.key)}
+            >
+              {preset.key}
+            </Button>
+          ))}
+        </div>
+      </div>
+      <div className="flex items-center justify-between">
+        <div>
+          <Label className="text-xs text-muted-foreground">
+            环境变量
+          </Label>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            启动时注入到智能体进程中（例如 OPENAI_API_KEY、ANTHROPIC_API_KEY、
+            OPENAI_BASE_URL）
+          </p>
+        </div>
         <Button
           type="button"
           variant="outline"
           size="sm"
           onClick={addEnvEntry}
-          className="shrink-0"
+          className="h-7 gap-1 text-xs"
         >
           <Plus className="h-3 w-3" />
-          {t(($) => $.tab_body.common.add)}
+          添加
         </Button>
       </div>
-
       {envEntries.length > 0 && (
         <div className="space-y-2">
           {envEntries.map((entry, index) => (
@@ -190,7 +320,7 @@ export function EnvTab({
               <Input
                 value={entry.key}
                 onChange={(e) => updateEnvEntry(index, "key", e.target.value)}
-                placeholder={t(($) => $.tab_body.env.key_placeholder)}
+                placeholder="KEY"
                 className="w-[40%] font-mono text-xs"
               />
               <div className="relative flex-1">
@@ -200,14 +330,13 @@ export function EnvTab({
                   onChange={(e) =>
                     updateEnvEntry(index, "value", e.target.value)
                   }
-                  placeholder={t(($) => $.tab_body.env.value_placeholder)}
+                  placeholder="value"
                   className="pr-8 font-mono text-xs"
                 />
                 <button
                   type="button"
                   onClick={() => toggleEnvVisibility(index)}
                   className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  aria-label={entry.visible ? t(($) => $.tab_body.env.hide_value_aria) : t(($) => $.tab_body.env.show_value_aria)}
                 >
                   {entry.visible ? (
                     <EyeOff className="h-3.5 w-3.5" />
@@ -216,33 +345,26 @@ export function EnvTab({
                   )}
                 </button>
               </div>
-              <Button
-                variant="ghost"
-                size="icon-sm"
+              <button
+                type="button"
                 onClick={() => removeEnvEntry(index)}
-                className="text-muted-foreground hover:text-destructive"
-                aria-label={t(($) => $.tab_body.env.remove_aria)}
+                className="shrink-0 text-muted-foreground hover:text-destructive"
               >
                 <Trash2 className="h-3.5 w-3.5" />
-              </Button>
+              </button>
             </div>
           ))}
         </div>
       )}
 
-      <div className="flex items-center justify-end gap-3">
-        {dirty && (
-          <span className="text-xs text-muted-foreground">{t(($) => $.tab_body.common.unsaved_changes)}</span>
+      <Button onClick={handleSave} disabled={!dirty || saving} size="sm">
+        {saving ? (
+          <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+        ) : (
+          <Save className="h-3.5 w-3.5 mr-1.5" />
         )}
-        <Button onClick={handleSave} disabled={!dirty || saving} size="sm">
-          {saving ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Save className="h-3.5 w-3.5" />
-          )}
-          {t(($) => $.tab_body.common.save)}
-        </Button>
-      </div>
+        保存
+      </Button>
     </div>
   );
 }

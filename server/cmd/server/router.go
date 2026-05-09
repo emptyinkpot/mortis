@@ -3,89 +3,33 @@ package main
 import (
 	"context"
 	"net/http"
-	"os"
 	"strings"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/redis/go-redis/v9"
 
-	"github.com/multica-ai/multica/server/internal/analytics"
 	"github.com/multica-ai/multica/server/internal/auth"
-	"github.com/multica-ai/multica/server/internal/daemonws"
 	"github.com/multica-ai/multica/server/internal/events"
 	"github.com/multica-ai/multica/server/internal/handler"
-	obsmetrics "github.com/multica-ai/multica/server/internal/metrics"
 	"github.com/multica-ai/multica/server/internal/middleware"
+	"github.com/multica-ai/multica/server/internal/qqagents"
+	"github.com/multica-ai/multica/server/internal/qqbridge"
 	"github.com/multica-ai/multica/server/internal/realtime"
+	"github.com/multica-ai/multica/server/internal/roles"
 	"github.com/multica-ai/multica/server/internal/service"
 	"github.com/multica-ai/multica/server/internal/storage"
+	"github.com/multica-ai/multica/server/internal/telegrambridge"
 	"github.com/multica-ai/multica/server/internal/util"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
-var defaultOrigins = []string{
-	"http://localhost:3000", // Next.js dev
-	"http://localhost:5173", // electron-vite dev
-	"http://localhost:5174", // electron-vite dev (fallback port)
-}
-
-func allowedOrigins() []string {
-	raw := strings.TrimSpace(os.Getenv("CORS_ALLOWED_ORIGINS"))
-	if raw == "" {
-		raw = strings.TrimSpace(os.Getenv("FRONTEND_ORIGIN"))
-	}
-	if raw == "" {
-		return defaultOrigins
-	}
-
-	parts := strings.Split(raw, ",")
-	origins := make([]string, 0, len(parts))
-	for _, part := range parts {
-		origin := strings.TrimSpace(part)
-		if origin != "" {
-			origins = append(origins, origin)
-		}
-	}
-	if len(origins) == 0 {
-		return defaultOrigins
-	}
-	return origins
-}
-
 // NewRouter creates the fully-configured Chi router with all middleware and routes.
-// rdb is optional: when non-nil the runtime local-skill request stores are
-// swapped for Redis-backed implementations so multiple API nodes share the
-// same pending queue (required for multi-node prod). This should be a request
-// path Redis client, not the realtime relay's blocking read client. A nil rdb
-// keeps the default in-memory stores which are fine for single-node dev and
-// tests.
-func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, analyticsClient analytics.Client, rdb *redis.Client) chi.Router {
-	return NewRouterWithOptions(pool, hub, bus, analyticsClient, rdb, RouterOptions{})
-}
-
-type RouterOptions struct {
-	HTTPMetrics  *obsmetrics.HTTPMetrics
-	DaemonHub    *daemonws.Hub
-	DaemonWakeup service.TaskWakeupNotifier
-	// HeartbeatScheduler, when non-nil, replaces the default synchronous
-	// passthrough scheduler on the constructed Handler. main.go injects a
-	// BatchedHeartbeatScheduler here so the caller can also drive Run/Stop;
-	// tests leave this nil and get the legacy synchronous behavior.
-	HeartbeatScheduler handler.HeartbeatScheduler
-}
-
-func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus, analyticsClient analytics.Client, rdb *redis.Client, opts RouterOptions) chi.Router {
+func NewRouter(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus) chi.Router {
 	queries := db.New(pool)
 	emailSvc := service.NewEmailService()
-	daemonHub := opts.DaemonHub
-	if daemonHub == nil {
-		daemonHub = daemonws.NewHub()
-	}
 
 	// Initialize storage with S3 as primary, fallback to local
 	var store storage.Storage
@@ -100,60 +44,29 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 	}
 
 	cfSigner := auth.NewCloudFrontSignerFromEnv()
-
-	signupConfig := handler.Config{
-		AllowSignup:                   os.Getenv("ALLOW_SIGNUP") != "false",
-		AllowedEmails:                 splitAndTrim(os.Getenv("ALLOWED_EMAILS")),
-		AllowedEmailDomains:           splitAndTrim(os.Getenv("ALLOWED_EMAIL_DOMAINS")),
-		UseDailyRollupForRuntimeUsage: os.Getenv("USAGE_DAILY_ROLLUP_ENABLED") == "true",
+	h := handler.New(queries, pool, hub, bus, emailSvc, store, cfSigner)
+	registerIssueHandoffListeners(bus, queries, h.TaskService)
+	if err := roles.StartBuilderDispatcherFromEnv(context.Background(), pool, nil); err != nil {
+		panic(err)
 	}
-	h := handler.New(queries, pool, hub, bus, emailSvc, store, cfSigner, analyticsClient, signupConfig, daemonHub)
-	if opts.DaemonWakeup != nil {
-		h.TaskService.Wakeup = opts.DaemonWakeup
+	if err := qqbridge.StartNotifierFromEnv(context.Background(), pool, nil); err != nil {
+		panic(err)
 	}
-	if rdb != nil {
-		h.UpdateStore = handler.NewRedisUpdateStore(rdb)
-		h.ModelListStore = handler.NewRedisModelListStore(rdb)
-		h.LocalSkillListStore = handler.NewRedisLocalSkillListStore(rdb)
-		h.LocalSkillImportStore = handler.NewRedisLocalSkillImportStore(rdb)
-		h.LivenessStore = handler.NewRedisLivenessStore(rdb)
+	if err := telegrambridge.StartNotifierFromEnv(context.Background(), pool, nil); err != nil {
+		panic(err)
 	}
-	if opts.HeartbeatScheduler != nil {
-		h.HeartbeatScheduler = opts.HeartbeatScheduler
+	if err := qqagents.StartFromEnv(context.Background(), pool, nil); err != nil {
+		panic(err)
 	}
-	// Auth caches: PAT cache is shared between the regular Auth middleware,
-	// the DaemonAuth fallback (mul_) path, and the revoke handler
-	// (invalidate). DaemonTokenCache backs the DaemonAuth mdt_ path. Both
-	// constructors return nil when rdb is nil — every consumer handles that
-	// as "no cache, always hit DB".
-	patCache := auth.NewPATCache(rdb)
-	daemonTokenCache := auth.NewDaemonTokenCache(rdb)
-	h.PATCache = patCache
-	h.DaemonTokenCache = daemonTokenCache
-
-	// Empty-claim cache: lets the daemon poll path skip a Postgres
-	// scan when a recent check confirmed the runtime had no queued
-	// task. Returns nil when rdb is nil — TaskService treats that
-	// as "no cache, always hit DB" (existing behavior).
-	h.TaskService.EmptyClaim = service.NewEmptyClaimCache(rdb)
-
-	// Wire WS heartbeat after stores are finalized so the WS path uses the
-	// same (possibly Redis-backed) stores as the HTTP path.
-	daemonHub.SetHeartbeatHandler(h.HandleDaemonWSHeartbeat)
-	health := newServerHealth(pool)
 
 	r := chi.NewRouter()
 
 	// Global middleware
 	r.Use(chimw.RequestID)
-	r.Use(middleware.ClientMetadata)
 	r.Use(middleware.RequestLogger)
-	if opts.HTTPMetrics != nil {
-		r.Use(opts.HTTPMetrics.Middleware)
-	}
 	r.Use(chimw.Recoverer)
 	r.Use(middleware.ContentSecurityPolicy)
-	origins := allowedOrigins()
+	origins := realtime.LoadAllowedOriginsFromEnv()
 
 	// Share allowed origins with WebSocket origin checker.
 	realtime.SetAllowedOrigins(origins)
@@ -161,30 +74,37 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   origins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Workspace-ID", "X-Workspace-Slug", "X-Request-ID", "X-Agent-ID", "X-Task-ID", "X-CSRF-Token", "X-Client-Platform", "X-Client-Version", "X-Client-OS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Workspace-ID", "X-Workspace-Slug", "X-Request-ID", "X-Agent-ID", "X-Task-ID", "X-CSRF-Token"},
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
 
-	// Health / readiness checks
-	r.Get("/health", health.liveHandler)
-	r.Get("/readyz", health.readyHandler)
-	r.Get("/healthz", health.readyHandler)
+	// Health check
+	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"status":"ok"}`))
+	})
+	// Operator event gateway. Authenticated by MORTIS_OPERATOR_EVENT_SECRET when set.
+	r.Post("/api/operator-events", h.IngestOperatorEvent)
+	// Telegram natural-language gateway. n8n/Telegram sends updates here; Mortis routes them into role_actions.
+	r.Post("/api/telegram/operator-message", h.IngestTelegramOperatorMessage)
+	// Telegram living-agent gateway. n8n sends Telegram updates here for GLM-backed persona replies.
+	r.Post("/api/telegram/living-message", h.IngestTelegramLivingMessage)
 
-	// Realtime subsystem metrics — connection counts, slow-client evictions,
-	// and per-event-type send QPS counters. Exposed as JSON so it can be
-	// scraped by ops or surfaced in the admin UI without adding a Prometheus
-	// dependency. See MUL-1138 (Phase 0).
-	//
-	// Access is restricted (MUL-1342): when REALTIME_METRICS_TOKEN is set,
-	// callers must present it via Authorization: Bearer <token>. When the
-	// env var is unset the handler only serves loopback callers so local
-	// dev keeps working without exposing the metrics on a public listener.
-	r.Get("/health/realtime", realtimeMetricsHandler(os.Getenv("REALTIME_METRICS_TOKEN")))
+	// A2A primitive gateway. These endpoints persist agent delegation events into
+	// the existing agent_shared_threads, agent_cognitive_events, and studio_artifacts tables.
+	r.Post("/api/a2a/delegations", h.CreateA2ADelegation)
+	r.Get("/api/a2a/threads/{threadId}/mailbox", h.ListA2AMailbox)
+
+	if inbound, enabled, err := qqbridge.NewInboundHandlerFromEnv(pool, nil); err != nil {
+		panic(err)
+	} else if enabled {
+		r.Post("/api/qq/onebot", inbound.ServeHTTP)
+	}
 
 	// WebSocket
 	mc := &membershipChecker{queries: queries}
-	pr := &patResolver{queries: queries, cache: patCache}
+	pr := &patResolver{queries: queries}
 	slugResolver := realtime.SlugResolver(func(ctx context.Context, slug string) (string, error) {
 		ws, err := queries.GetWorkspaceBySlug(ctx, slug)
 		if err != nil {
@@ -210,25 +130,19 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 	r.Post("/auth/google", h.GoogleLogin)
 	r.Post("/auth/logout", h.Logout)
 
-	// Public API
-	r.Get("/api/config", h.GetConfig)
-
 	// Daemon API routes (require daemon token or valid user token)
 	r.Route("/api/daemon", func(r chi.Router) {
-		r.Use(middleware.DaemonAuth(queries, patCache, daemonTokenCache))
+		r.Use(middleware.DaemonAuth(queries))
 
 		r.Post("/register", h.DaemonRegister)
 		r.Post("/deregister", h.DaemonDeregister)
 		r.Post("/heartbeat", h.DaemonHeartbeat)
-		r.Get("/ws", h.DaemonWebSocket)
 		r.Get("/workspaces/{workspaceId}/repos", h.GetDaemonWorkspaceRepos)
 
 		r.Post("/runtimes/{runtimeId}/tasks/claim", h.ClaimTaskByRuntime)
 		r.Get("/runtimes/{runtimeId}/tasks/pending", h.ListPendingTasksByRuntime)
+		r.Post("/runtimes/{runtimeId}/ping/{pingId}/result", h.ReportPingResult)
 		r.Post("/runtimes/{runtimeId}/update/{updateId}/result", h.ReportUpdateResult)
-		r.Post("/runtimes/{runtimeId}/models/{requestId}/result", h.ReportModelListResult)
-		r.Post("/runtimes/{runtimeId}/local-skills/{requestId}/result", h.ReportLocalSkillListResult)
-		r.Post("/runtimes/{runtimeId}/local-skills/import/{requestId}/result", h.ReportLocalSkillImportResult)
 
 		r.Get("/tasks/{taskId}/status", h.GetTaskStatus)
 		r.Post("/tasks/{taskId}/start", h.StartTask)
@@ -240,30 +154,19 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 		r.Get("/tasks/{taskId}/messages", h.ListTaskMessages)
 
 		r.Get("/issues/{issueId}/gc-check", h.GetIssueGCCheck)
-		r.Get("/chat-sessions/{sessionId}/gc-check", h.GetChatSessionGCCheck)
-		r.Get("/autopilot-runs/{runId}/gc-check", h.GetAutopilotRunGCCheck)
-		r.Get("/tasks/{taskId}/gc-check", h.GetTaskGCCheck)
-
-		r.Post("/runtimes/{runtimeId}/recover-orphans", h.RecoverOrphanedTasks)
-		r.Post("/tasks/{taskId}/session", h.PinTaskSession)
 	})
 
 	// Protected API routes
 	r.Group(func(r chi.Router) {
-		r.Use(middleware.Auth(queries, patCache))
+		r.Use(middleware.Auth(queries))
 		r.Use(middleware.RefreshCloudFrontCookies(cfSigner))
 
 		// --- User-scoped routes (no workspace context required) ---
+		r.Get("/api/config", h.GetConfig)
 		r.Get("/api/me", h.GetMe)
 		r.Patch("/api/me", h.UpdateMe)
-		r.Patch("/api/me/onboarding", h.PatchOnboarding)
-		r.Post("/api/me/onboarding/complete", h.CompleteOnboarding)
-		r.Post("/api/me/onboarding/cloud-waitlist", h.JoinCloudWaitlist)
-		r.Post("/api/me/starter-content/import", h.ImportStarterContent)
-		r.Post("/api/me/starter-content/dismiss", h.DismissStarterContent)
 		r.Post("/api/cli-token", h.IssueCliToken)
 		r.Post("/api/upload-file", h.UploadFile)
-		r.Post("/api/feedback", h.CreateFeedback)
 
 		r.Route("/api/workspaces", func(r chi.Router) {
 			r.Get("/", h.ListWorkspaces)
@@ -319,7 +222,6 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 				r.Get("/child-progress", h.ChildIssueProgress)
 				r.Get("/", h.ListIssues)
 				r.Post("/", h.CreateIssue)
-				r.Post("/quick-create", h.QuickCreateIssue)
 				r.Post("/batch-update", h.BatchUpdateIssues)
 				r.Post("/batch-delete", h.BatchDeleteIssues)
 				r.Route("/{id}", func(r chi.Router) {
@@ -334,32 +236,17 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 					r.Post("/unsubscribe", h.UnsubscribeFromIssue)
 					r.Get("/active-task", h.GetActiveTaskForIssue)
 					r.Post("/tasks/{taskId}/cancel", h.CancelTask)
-					r.Post("/rerun", h.RerunIssue)
 					r.Get("/task-runs", h.ListTasksByIssue)
 					r.Get("/usage", h.GetIssueUsage)
 					r.Post("/reactions", h.AddIssueReaction)
 					r.Delete("/reactions", h.RemoveIssueReaction)
 					r.Get("/attachments", h.ListAttachments)
 					r.Get("/children", h.ListChildIssues)
-					r.Get("/labels", h.ListLabelsForIssue)
-					r.Post("/labels", h.AttachLabel)
-					r.Delete("/labels/{labelId}", h.DetachLabel)
 				})
 			})
 
 			// Task messages (user-facing, not daemon auth)
 			r.Get("/api/tasks/{taskId}/messages", h.ListTaskMessagesByUser)
-
-			// Labels
-			r.Route("/api/labels", func(r chi.Router) {
-				r.Get("/", h.ListLabels)
-				r.Post("/", h.CreateLabel)
-				r.Route("/{id}", func(r chi.Router) {
-					r.Get("/", h.GetLabel)
-					r.Put("/", h.UpdateLabel)
-					r.Delete("/", h.DeleteLabel)
-				})
-			})
 
 			// Projects
 			r.Route("/api/projects", func(r chi.Router) {
@@ -370,11 +257,21 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 					r.Get("/", h.GetProject)
 					r.Put("/", h.UpdateProject)
 					r.Delete("/", h.DeleteProject)
-					r.Get("/resources", h.ListProjectResources)
-					r.Post("/resources", h.CreateProjectResource)
-					r.Delete("/resources/{resourceId}", h.DeleteProjectResource)
 				})
 			})
+
+			// Role AI organization
+			r.Route("/api/roles", func(r chi.Router) {
+				r.Get("/", h.ListRoles)
+				r.Post("/", h.CreateRole)
+				r.Post("/route-message", h.RouteRoleMessage)
+				r.Get("/invocations", h.ListRoleInvocations)
+				r.Get("/{id}", h.GetRole)
+				r.Put("/{id}", h.UpdateRole)
+			})
+
+			// Agent OS cockpit summary
+			r.Get("/api/agent-os/summary", h.GetAgentOSSummary)
 
 			// Autopilots
 			r.Route("/api/autopilots", func(r chi.Router) {
@@ -410,8 +307,6 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 			r.Route("/api/comments/{commentId}", func(r chi.Router) {
 				r.Put("/", h.UpdateComment)
 				r.Delete("/", h.DeleteComment)
-				r.Post("/resolve", h.ResolveComment)
-				r.Delete("/resolve", h.UnresolveComment)
 				r.Post("/reactions", h.AddReaction)
 				r.Delete("/reactions", h.RemoveReaction)
 			})
@@ -422,10 +317,10 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 				r.Post("/", h.CreateAgent)
 				r.Route("/{id}", func(r chi.Router) {
 					r.Get("/", h.GetAgent)
+					r.Get("/napcat-accounts", h.ListAgentNapcatAccounts)
 					r.Put("/", h.UpdateAgent)
 					r.Post("/archive", h.ArchiveAgent)
 					r.Post("/restore", h.RestoreAgent)
-					r.Post("/cancel-tasks", h.CancelAgentTasks)
 					r.Get("/tasks", h.ListAgentTasks)
 					r.Get("/skills", h.ListAgentSkills)
 					r.Put("/skills", h.SetAgentSkills)
@@ -458,17 +353,11 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 				r.Get("/", h.ListAgentRuntimes)
 				r.Route("/{runtimeId}", func(r chi.Router) {
 					r.Get("/usage", h.GetRuntimeUsage)
-					r.Get("/usage/by-agent", h.GetRuntimeUsageByAgent)
-					r.Get("/usage/by-hour", h.GetRuntimeUsageByHour)
 					r.Get("/activity", h.GetRuntimeTaskActivity)
+					r.Post("/ping", h.InitiatePing)
+					r.Get("/ping/{pingId}", h.GetPing)
 					r.Post("/update", h.InitiateUpdate)
 					r.Get("/update/{updateId}", h.GetUpdate)
-					r.Post("/models", h.InitiateListModels)
-					r.Get("/models/{requestId}", h.GetModelListRequest)
-					r.Post("/local-skills", h.InitiateListLocalSkills)
-					r.Get("/local-skills/{requestId}", h.GetLocalSkillListRequest)
-					r.Post("/local-skills/import", h.InitiateImportLocalSkill)
-					r.Get("/local-skills/import/{requestId}", h.GetLocalSkillImportRequest)
 					r.Delete("/", h.DeleteAgentRuntime)
 				})
 			})
@@ -476,24 +365,12 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 			// Tasks (user-facing, with ownership check)
 			r.Post("/api/tasks/{taskId}/cancel", h.CancelTaskByUser)
 
-			// Workspace-wide agent task snapshot for presence derivation:
-			// every active task + each agent's most recent terminal task.
-			r.Get("/api/agent-task-snapshot", h.ListWorkspaceAgentTaskSnapshot)
-
-			// Workspace-wide daily agent activity (last 30d, anchored on
-			// completed_at). Backs the Agents-list sparkline (trailing 7d
-			// slice) AND the agent detail "Last 30 days" panel.
-			r.Get("/api/agent-activity-30d", h.GetWorkspaceAgentActivity30d)
-
-			// Workspace-wide 30-day run counts per agent for the Agents-list RUNS column.
-			r.Get("/api/agent-run-counts", h.GetWorkspaceAgentRunCounts)
-
 			r.Route("/api/chat/sessions", func(r chi.Router) {
 				r.Post("/", h.CreateChatSession)
 				r.Get("/", h.ListChatSessions)
 				r.Route("/{sessionId}", func(r chi.Router) {
 					r.Get("/", h.GetChatSession)
-					r.Delete("/", h.DeleteChatSession)
+					r.Delete("/", h.ArchiveChatSession)
 					r.Post("/messages", h.SendChatMessage)
 					r.Get("/messages", h.ListChatMessages)
 					r.Get("/pending-task", h.GetPendingChatTask)
@@ -512,12 +389,6 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 				r.Post("/archive-completed", h.ArchiveCompletedInbox)
 				r.Post("/{id}/read", h.MarkInboxRead)
 				r.Post("/{id}/archive", h.ArchiveInboxItem)
-			})
-
-			// Notification preferences
-			r.Route("/api/notification-preferences", func(r chi.Router) {
-				r.Get("/", h.GetNotificationPreferences)
-				r.Put("/", h.UpdateNotificationPreferences)
 			})
 		})
 	})
@@ -539,59 +410,25 @@ func (mc *membershipChecker) IsMember(ctx context.Context, userID, workspaceID s
 }
 
 // patResolver implements realtime.PATResolver using database queries.
-// patCache is shared with the Auth and DaemonAuth middlewares so a token
-// revoke through any path invalidates the cache for all of them. Nil
-// cache is supported and degrades to direct DB lookups.
 type patResolver struct {
 	queries *db.Queries
-	cache   *auth.PATCache
 }
 
 func (pr *patResolver) ResolveToken(ctx context.Context, token string) (string, bool) {
 	hash := auth.HashToken(token)
-
-	if userID, ok := pr.cache.Get(ctx, hash); ok {
-		return userID, true
-	}
-
 	pat, err := pr.queries.GetPersonalAccessTokenByHash(ctx, hash)
 	if err != nil {
 		return "", false
 	}
-
-	userID := util.UUIDToString(pat.UserID)
-
-	var expiresAt time.Time
-	if pat.ExpiresAt.Valid {
-		expiresAt = pat.ExpiresAt.Time
-	}
-	pr.cache.Set(ctx, hash, userID, auth.TTLForExpiry(time.Now(), expiresAt))
-
-	// Cache miss = first WS auth in this TTL window. Refresh last_used_at;
-	// subsequent connects within the window skip the write.
+	// Best-effort: update last_used_at
 	go pr.queries.UpdatePersonalAccessTokenLastUsed(context.Background(), pat.ID)
-
-	return userID, true
+	return util.UUIDToString(pat.UserID), true
 }
 
-// parseUUID is a thin alias for util.MustParseUUID. Call sites here are all
-// internal round-trips of DB-sourced UUIDs (e.g. issue.ID, e.ActorID), so an
-// invalid value indicates a programming error and should panic loudly.
 func parseUUID(s string) pgtype.UUID {
-	return util.MustParseUUID(s)
-}
-
-func splitAndTrim(s string) []string {
-	if s == "" {
-		return nil
+	var u pgtype.UUID
+	if err := u.Scan(s); err != nil {
+		return pgtype.UUID{}
 	}
-	parts := strings.Split(s, ",")
-	res := make([]string, 0, len(parts))
-	for _, p := range parts {
-		trimmed := strings.TrimSpace(p)
-		if trimmed != "" {
-			res = append(res, trimmed)
-		}
-	}
-	return res
+	return u
 }

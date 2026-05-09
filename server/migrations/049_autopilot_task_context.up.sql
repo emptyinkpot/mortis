@@ -1,0 +1,2 @@
+ALTER TABLE autopilot
+ADD COLUMN IF NOT EXISTS task_context JSONB;

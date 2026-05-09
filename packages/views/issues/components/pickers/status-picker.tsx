@@ -5,7 +5,6 @@ import type { IssueStatus, UpdateIssueRequest } from "@multica/core/types";
 import { ALL_STATUSES, STATUS_CONFIG } from "@multica/core/issues/config";
 import { StatusIcon } from "../status-icon";
 import { PropertyPicker, PickerItem } from "./property-picker";
-import { useT } from "../../../i18n";
 
 export function StatusPicker({
   status,
@@ -27,7 +26,7 @@ export function StatusPicker({
   const [internalOpen, setInternalOpen] = useState(false);
   const open = controlledOpen ?? internalOpen;
   const setOpen = controlledOnOpenChange ?? setInternalOpen;
-  const { t } = useT("issues");
+  const cfg = STATUS_CONFIG[status];
 
   return (
     <PropertyPicker
@@ -40,7 +39,7 @@ export function StatusPicker({
         customTrigger ?? (
           <>
             <StatusIcon status={status} className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate">{t(($) => $.status[status])}</span>
+            <span className="truncate">{cfg.label}</span>
           </>
         )
       }
@@ -58,7 +57,7 @@ export function StatusPicker({
             }}
           >
             <StatusIcon status={s} className="h-3.5 w-3.5" />
-            <span>{t(($) => $.status[s])}</span>
+            <span>{c.label}</span>
           </PickerItem>
         );
       })}

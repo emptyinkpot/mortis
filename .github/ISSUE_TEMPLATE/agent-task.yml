@@ -1,0 +1,79 @@
+name: Agent Task
+about: Scoped task for an AI or human agent working through the Mortis agent workflow.
+title: "[Agent Task]: "
+labels: ["agent-task"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before editing, read `AGENT_WORKFLOW.md` and `contracts/agent-collaboration-policy.json`.
+        Use a dedicated branch, dedicated worktree, claim file, path-scoped staging, and PR delivery unless explicitly blocked.
+  - type: input
+    id: agent-id
+    attributes:
+      label: Agent ID
+      description: Example: codex-implementer, claude-architect, reviewer-agent
+      placeholder: codex-implementer
+    validations:
+      required: true
+  - type: dropdown
+    id: role
+    attributes:
+      label: Role
+      options:
+        - architect
+        - implementer
+        - reviewer
+        - researcher
+        - release-manager
+    validations:
+      required: true
+  - type: textarea
+    id: task
+    attributes:
+      label: Task
+      description: What should this agent change or verify?
+      placeholder: Describe the exact task and expected deliverable.
+    validations:
+      required: true
+  - type: textarea
+    id: claimed-paths
+    attributes:
+      label: Claimed Paths
+      description: Paths this task expects to modify or inspect.
+      placeholder: |
+        docs/architecture/agent-society-runtime.md
+        contracts/a2a-mailbox.schema.json
+    validations:
+      required: true
+  - type: input
+    id: branch
+    attributes:
+      label: Branch
+      description: Follow AGENT_WORKFLOW.md naming rules.
+      placeholder: agent/codex-implementer/a2a-mailbox-contract
+    validations:
+      required: true
+  - type: input
+    id: worktree
+    attributes:
+      label: Worktree
+      placeholder: ../worktrees/codex-implementer-a2a-mailbox-contract
+    validations:
+      required: true
+  - type: textarea
+    id: checks
+    attributes:
+      label: Required Checks
+      placeholder: |
+        make policy-check
+        npm run check
+        npm run test
+    validations:
+      required: true
+  - type: textarea
+    id: risks
+    attributes:
+      label: Known Risks / Boundaries
+      description: Mention paths or runtime state that must not be touched.
+      placeholder: Do not stage agent-workspaces/, openlist-export/, codex-home/.

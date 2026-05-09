@@ -1,14 +1,8 @@
--- name: ListActivitiesForIssue :many
--- All activities for an issue in chronological order, capped at $2 (DB safety
--- net to bound the response).
+-- name: ListActivities :many
 SELECT * FROM activity_log
 WHERE issue_id = $1
-ORDER BY created_at ASC, id ASC
-LIMIT $2;
-
--- name: GetActivity :one
-SELECT * FROM activity_log
-WHERE id = $1;
+ORDER BY created_at ASC
+LIMIT $2 OFFSET $3;
 
 -- name: CreateActivity :one
 INSERT INTO activity_log (

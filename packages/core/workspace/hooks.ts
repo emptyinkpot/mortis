@@ -11,18 +11,18 @@ export function useActorName() {
 
   const getMemberName = (userId: string) => {
     const m = members.find((m) => m.user_id === userId);
-    return m?.name ?? "Unknown";
+    return m?.name ?? "未知成员";
   };
 
   const getAgentName = (agentId: string) => {
     const a = agents.find((a) => a.id === agentId);
-    return a?.name ?? "Unknown Agent";
+    return a?.name ?? "未知代理";
   };
 
   const getActorName = (type: string, id: string) => {
     if (type === "member") return getMemberName(id);
     if (type === "agent") return getAgentName(id);
-    return "System";
+    return "系统";
   };
 
   const getActorInitials = (type: string, id: string) => {

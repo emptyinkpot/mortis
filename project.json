@@ -1,0 +1,772 @@
+{
+  "projectName": "Multica private fork",
+  "canonicalDoc": "README.md",
+  "machineReadableEntry": "project.json",
+  "githubRepo": "https://github.com/emptyinkpot/mortis-multica-source",
+  "upstreamRuntimeFoundationRepo": "https://github.com/multica-ai/multica",
+  "defaultBranch": "main",
+  "localBranch": "main",
+  "localSourceRoot": null,
+  "remoteFirstSourceRoot": "ubuntu@124.220.233.126:/srv/multica",
+  "sourceRoots": {
+    "registry": "docs/source-roots.json",
+    "canonicalLocalRoot": null,
+    "remoteFirstRoot": "ubuntu@124.220.233.126:/srv/multica",
+    "canonicalBranch": "main",
+    "retiredDeployWorktree": "E:\\My Project\\Mortis-deploy-l3",
+    "retiredDeployBranch": "deploy/l3-manager-dispatcher",
+    "retiredDeployMergedIntoMainBy": "913ba1e",
+    "productionServerRoot": "/srv/multica",
+    "rule": "Remote-first source root is ubuntu@124.220.233.126:/srv/multica. Local checkout E:\\My Project\\Mortis is retired and must not be used as the default source of truth. Any future local clone is only a synchronized copy."
+  },
+  "status": "remote-first-worktree",
+  "publicAppUrl": "https://mortis.tengokukk.com",
+  "publicAboutUrl": "https://mortis.tengokukk.com/about",
+  "legacyRedirectHost": "https://golutra.tengokukk.com",
+  "privateDeploymentNotes": "MORTIS_PRIVATE_DEPLOYMENT_NOTES.md",
+  "selfHostingGuide": "SELF_HOSTING.md",
+  "selfHostingAdvancedGuide": "SELF_HOSTING_ADVANCED.md",
+  "selfHostingAiGuide": "SELF_HOSTING_AI.md",
+  "privateDeploymentFileAudit": "docs/private-deployment-file-audit.md",
+  "currentRuntimeMap": "docs/operations/current-runtime-map.md",
+  "mortisShellArchitecture": "docs/architecture/mortis-shell.md",
+  "contributingGuide": "CONTRIBUTING.md",
+  "cliAndDaemonGuide": "CLI_AND_DAEMON.md",
+  "repositoryRules": "AGENTS.md",
+  "repositoryDeepRules": "CLAUDE.md",
+  "privateServerHost": "124.220.233.126",
+  "privateServerRuntimeRoot": "/srv/multica",
+  "privateServerBackendBind": "127.0.0.1:8088",
+  "privateServerFrontendBind": "127.0.0.1:3300",
+  "privateOperatorIdentity": "emptyinkpot <emptyinkpot@users.noreply.github.com>",
+  "defaultWorkspace": {
+    "name": "Mortis",
+    "slug": "mortis"
+  },
+  "localDev": {
+    "backendUrl": "http://localhost:8080",
+    "frontendUrl": "http://localhost:3000",
+    "databaseUrl": "postgres://multica:multica@localhost:5432/multica?sslmode=disable",
+    "envTemplate": ".env.example",
+    "envPrimary": ".env",
+    "envWorktree": ".env.worktree"
+  },
+  "selfHost": {
+    "composeFile": "docker-compose.selfhost.yml",
+    "backendUrl": "http://localhost:8080",
+    "frontendUrl": "http://localhost:3000",
+    "databaseImage": "pgvector/pgvector:pg17"
+  },
+  "replicationRunbook": {
+    "humanDocSection": "README.md#021-从零复刻-runbook",
+    "chineseDocSection": "README.zh-CN.md#021-从零复刻-runbook",
+    "scope": [
+      "local development replication",
+      "generic Docker Compose self-host replication",
+      "private production boundary documentation"
+    ],
+    "prerequisites": [
+      {
+        "name": "git",
+        "requirement": "current stable"
+      },
+      {
+        "name": "node",
+        "requirement": "22 recommended; 20+ accepted for local development"
+      },
+      {
+        "name": "pnpm",
+        "requirement": "10.28.2"
+      },
+      {
+        "name": "go",
+        "requirement": "1.26+"
+      },
+      {
+        "name": "docker compose",
+        "requirement": "current stable"
+      },
+      {
+        "name": "openssl",
+        "requirement": "available when make selfhost needs to generate JWT_SECRET"
+      }
+    ],
+    "sourceCheckout": {
+      "cloneUrl": "https://github.com/emptyinkpot/mortis-multica-source.git",
+      "localSourceRoot": null,
+      "remoteFirstSourceRoot": "ubuntu@124.220.233.126:/srv/multica"
+    },
+    "localDevelopment": {
+      "envBootstrap": "cp .env.example .env",
+      "startCommand": "make dev",
+      "splitCommands": [
+        "make setup",
+        "make start"
+      ],
+      "expectedUrls": {
+        "frontend": "http://localhost:3000",
+        "backend": "http://localhost:8080",
+        "websocket": "ws://localhost:8080/ws",
+        "database": "postgres://multica:multica@localhost:5432/multica?sslmode=disable"
+      }
+    },
+    "selfHosting": {
+      "envBootstrap": "cp .env.example .env",
+      "startCommand": "make selfhost",
+      "stopCommand": "make selfhost-stop",
+      "composeFile": "docker-compose.selfhost.yml",
+      "databaseImage": "pgvector/pgvector:pg17",
+      "expectedUrls": {
+        "frontend": "http://localhost:3000",
+        "backend": "http://localhost:8080"
+      },
+      "requiredOperatorAction": "replace JWT_SECRET with a strong random value for any non-local deployment"
+    },
+    "loginPaths": [
+      {
+        "mode": "production-like",
+        "requirement": "set RESEND_API_KEY and receive email verification codes"
+      },
+      {
+        "mode": "local-evaluation",
+        "requirement": "set APP_ENV=development and use verification code 888888"
+      },
+      {
+        "mode": "temporary-debug",
+        "requirement": "read the generated verification code from backend logs"
+      }
+    ],
+    "verificationCommands": [
+      "pnpm typecheck",
+      "pnpm test",
+      "make test",
+      "make check"
+    ],
+    "minimumFunctionalChecks": [
+      "web opens at http://localhost:3000",
+      "user can log in and enter a workspace",
+      "Settings / Runtimes shows daemon or runtime state",
+      "user can create an issue",
+      "assigned agent task can be picked up by daemon"
+    ],
+    "privateProductionBoundary": {
+      "notCoveredByGenericRunbook": [
+        "reverse proxy",
+        "TLS certificates",
+        "private single-operator auto-login variables",
+        "daemon binary refresh workflow",
+        "external control-plane mount"
+      ],
+      "authoritativeDocs": [
+        "MORTIS_PRIVATE_DEPLOYMENT_NOTES.md",
+        "SELF_HOSTING.md",
+        "SELF_HOSTING_ADVANCED.md",
+        "CLI_AND_DAEMON.md"
+      ],
+      "ports": {
+        "localDevBackend": ":8080",
+        "localDevFrontend": ":3000",
+        "genericSelfHostBackend": ":8080",
+        "genericSelfHostFrontend": ":3000",
+        "privateProductionBackendBind": "127.0.0.1:8088",
+        "privateProductionFrontendBind": "127.0.0.1:3300"
+      }
+    },
+    "minimalEnvironmentMatrix": {
+      "DATABASE_URL": {
+        "localDevelopment": "localhost PostgreSQL",
+        "selfHosting": "Compose internal PostgreSQL",
+        "privateProduction": "private server .env"
+      },
+      "JWT_SECRET": {
+        "localDevelopment": "example value acceptable",
+        "selfHosting": "strong random value required",
+        "privateProduction": "private strong secret required"
+      },
+      "FRONTEND_ORIGIN": {
+        "localDevelopment": "http://localhost:3000",
+        "selfHosting": "http://localhost:3000 or custom domain",
+        "privateProduction": "https://mortis.tengokukk.com"
+      },
+      "MULTICA_APP_URL": {
+        "localDevelopment": "http://localhost:3000",
+        "selfHosting": "http://localhost:3000 or custom domain",
+        "privateProduction": "https://mortis.tengokukk.com"
+      },
+      "CORS_ALLOWED_ORIGINS": {
+        "localDevelopment": "usually empty",
+        "selfHosting": "set when frontend/backend origins differ",
+        "privateProduction": "must match public entry origin"
+      },
+      "RESEND_API_KEY": {
+        "localDevelopment": "optional",
+        "selfHosting": "recommended",
+        "privateProduction": "expected for production email verification"
+      },
+      "APP_ENV": {
+        "localDevelopment": "development allowed",
+        "selfHosting": "production by default",
+        "privateProduction": "must not expose development login on public internet"
+      },
+      "MULTICA_AUTO_LOGIN_*": {
+        "localDevelopment": "usually empty",
+        "selfHosting": "optional",
+        "privateProduction": "set according to private deployment notes"
+      },
+      "NEXT_PUBLIC_AUTO_LOGIN_WORKSPACE_SLUG": {
+        "localDevelopment": "usually empty",
+        "selfHosting": "optional",
+        "privateProduction": "must match backend single-workspace slug when enabled"
+      }
+    },
+    "completionDefinition": [
+      "make dev or make selfhost starts the full service set",
+      "web/backend/database ports match .env",
+      "migrations complete successfully",
+      "login reaches a workspace",
+      "pnpm typecheck, pnpm test, and make test can run",
+      "private production replication follows MORTIS_PRIVATE_DEPLOYMENT_NOTES.md for ports, domains, reverse proxy, and daemon binary refresh"
+    ],
+    "livingAgentsMaterialChecklist": [
+      {
+        "material": "Mortis source tree",
+        "genericRequired": true,
+        "privateProductionParityRequired": true,
+        "source": "GitHub repo"
+      },
+      {
+        "material": "backend/postgres compose network",
+        "genericRequired": true,
+        "privateProductionParityRequired": true,
+        "source": "docker-compose.selfhost.yml"
+      },
+      {
+        "material": "four NapCat containers",
+        "genericRequired": "required when reproducing living QQ agents",
+        "privateProductionParityRequired": true,
+        "source": "Compose/runtime deployment"
+      },
+      {
+        "material": "four QQ accounts logged into NapCat",
+        "genericRequired": "use own QQ accounts",
+        "privateProductionParityRequired": true,
+        "source": "docs/private-qq-napcat-accounts.json"
+      },
+      {
+        "material": "OneBot11 HTTP server per account",
+        "genericRequired": true,
+        "privateProductionParityRequired": true,
+        "source": "NapCat WebUI config"
+      },
+      {
+        "material": "OneBot11 httpClients webhook",
+        "genericRequired": true,
+        "privateProductionParityRequired": true,
+        "source": "/api/qq/onebot?secret=<secret>"
+      },
+      {
+        "material": "bot UIN filter list",
+        "genericRequired": true,
+        "privateProductionParityRequired": true,
+        "source": "MORTIS_QQ_BOT_USER_IDS"
+      },
+      {
+        "material": "OpenAI-compatible LLM endpoint",
+        "genericRequired": "optional but required for natural replies",
+        "privateProductionParityRequired": true,
+        "source": ".env, do not commit API keys"
+      },
+      {
+        "material": "OpenList storage",
+        "genericRequired": "optional",
+        "privateProductionParityRequired": "required for durable studio records",
+        "source": "docs/private-openlist-blog-storage.json"
+      },
+      {
+        "material": "production domain/reverse proxy/TLS",
+        "genericRequired": false,
+        "privateProductionParityRequired": true,
+        "source": "MORTIS_PRIVATE_DEPLOYMENT_NOTES.md"
+      },
+      {
+        "material": "CI/log/issue/browse tools",
+        "genericRequired": "not complete in current system",
+        "privateProductionParityRequired": "not complete in current system",
+        "source": "studio_state and docs/private-ai-studio-permissions-and-addresses.json"
+      }
+    ],
+    "livingAgentsAcceptanceMatrix": [
+      {
+        "check": "backend health",
+        "command": "curl -fsS http://127.0.0.1:8088/health for private production, or configured backend port",
+        "pass": "JSON status is ok"
+      },
+      {
+        "check": "migrations",
+        "command": "backend startup logs or migrate output",
+        "pass": "no migration failure; studio_state table exists"
+      },
+      {
+        "check": "studio state",
+        "command": "SELECT state_key,status,owner_role FROM studio_state ORDER BY state_key;",
+        "pass": "eight baseline rows exist; missing capabilities are explicit"
+      },
+      {
+        "check": "NapCat login",
+        "command": "/get_login_info on all four OneBot endpoints",
+        "pass": "each endpoint returns expected QQ UIN"
+      },
+      {
+        "check": "group history",
+        "command": "/get_group_msg_history for target group",
+        "pass": "recent group messages are visible"
+      },
+      {
+        "check": "living agents startup",
+        "command": "backend logs",
+        "pass": "starting human-like qq agents agents=4 and no offline warnings"
+      },
+      {
+        "check": "direct mention",
+        "command": "real QQ at-mention or @builder/@tester/@watcher/@ceo",
+        "pass": "addressed role replies after provider/tool latency"
+      },
+      {
+        "check": "group-list workflow",
+        "command": "send 查查你们现在一共加了多少个群",
+        "pass": "CEO -> Watcher -> Tester -> CEO with real get_group_list result"
+      },
+      {
+        "check": "status probe",
+        "command": "send Builder 是不是卡住了 or /check builder",
+        "pass": "CEO reports online/action/invocation/artifact evidence instead of guessing"
+      },
+      {
+        "check": "artifact export",
+        "command": "trigger studio workflow with OpenList env enabled",
+        "pass": "JSON appears under MORTIS_OPENLIST_REMOTE_DIR; local export is cache only"
+      }
+    ]
+  },
+  "managerAiMvp": {
+    "status": "superseded-by-role-ai-organization",
+    "supersededBy": "roleAiOrganizationMvp",
+    "currentRule": "Manager is a built-in Role, not a standalone issue publisher.",
+    "activeBehavior": [
+      "the /:workspaceSlug/manager page displays the built-in manager role",
+      "the /:workspaceSlug/manager page sends commands through /api/roles/route-message",
+      "the /:workspaceSlug/manager page shows manager role invocation history"
+    ],
+    "forbiddenBehavior": [
+      "do not use /api/manager/plan from the Manager page",
+      "do not create Manager/Builder/Tester issues from the Manager page",
+      "do not fall back to the legacy Manager issue publisher when Role Registry is missing manager"
+    ],
+    "removedArtifacts": [
+      "server/internal/manager",
+      "server/internal/handler/manager.go",
+      "packages/core/manager",
+      "packages/core/types/manager.ts",
+      "public /api/manager routes",
+      "core package manager exports"
+    ],
+    "retainedDataMigrations": [
+      "server/migrations/050_manager_ai_mvp.up.sql",
+      "server/migrations/050_manager_ai_mvp.down.sql"
+    ]
+  },
+  "roleAiOrganizationMvp": {
+    "status": "mvp-source-aligned",
+    "goal": "Generalize Manager AI into the first built-in role of a configurable AI organization system.",
+    "organizationModel": [
+      "qq_web_internal_chat",
+      "conversation_bus",
+      "role_router",
+      "role_registry",
+      "manager_builder_tester_custom_roles",
+      "workflow_issue_approval_audit",
+      "codex_daemon_cli_external_tools"
+    ],
+    "corePrinciples": [
+      "Role is not Agent",
+      "Role defines responsibility, permissions, channels, approval policy, and prompt",
+      "Agent/runtime is an executor binding for a role",
+      "Natural language creates structured actions, not direct high-risk execution",
+      "QQ is an input/output channel, not an execution authority"
+    ],
+    "builtInRoles": [
+      "manager",
+      "builder",
+      "tester"
+    ],
+    "customRoleExamples": [
+      "finance",
+      "operations",
+      "researcher",
+      "reviewer",
+      "deployer"
+    ],
+    "channels": [
+      "web",
+      "internal_chat",
+      "qq",
+      "api"
+    ],
+    "sourceMap": {
+      "docs": [
+        "docs/role-ai-organization.md"
+      ],
+      "server": [
+        "server/internal/roles",
+        "server/internal/handler/roles.go",
+        "server/migrations/051_role_ai_org_mvp.up.sql",
+        "server/migrations/051_role_ai_org_mvp.down.sql"
+      ],
+      "core": [
+        "packages/core/types/role.ts",
+        "packages/core/roles"
+      ],
+      "views": [
+        "packages/views/roles",
+        "packages/views/manager"
+      ],
+      "web": [
+        "apps/web/app/[workspaceSlug]/(dashboard)/roles/page.tsx",
+        "apps/web/app/[workspaceSlug]/(dashboard)/manager/page.tsx"
+      ],
+      "desktop": [
+        "apps/desktop/src/renderer/src/routes.tsx"
+      ]
+    },
+    "api": [
+      "GET /api/roles",
+      "POST /api/roles",
+      "GET /api/roles/:id",
+      "PUT /api/roles/:id",
+      "POST /api/roles/route-message",
+      "GET /api/roles/invocations"
+    ],
+    "safetyGates": [
+      "deploy/delete/payment/production-config messages become approval requests",
+      "QQ commands do not directly execute high-risk actions",
+      "role invocations and actions are audit-backed"
+    ],
+    "firstStageAcceptance": [
+      "operator can open Role Registry",
+      "built-in Manager/Builder/Tester roles are available per workspace",
+      "operator can create custom roles",
+      "operator can route a Web/internal_chat/QQ message to a role",
+      "high-risk routed messages create approval requests",
+      "role invocation timeline is persisted",
+      "Manager page routes @manager messages through Role Router",
+      "Manager page does not call /api/manager/plan or create legacy manager issues"
+    ]
+  },
+  "l3AutonomousExecution": {
+    "status": "production-qq-builder-loop-verified",
+    "goal": "Move from L2 approved manual execution toward L3 automatic execution of approved Builder role actions without automatic production deployment.",
+    "runtimeSplit": {
+      "policy": "GLM is the QQ personality/research/planning runtime; Codex is the approved code/test/repo execution runtime.",
+      "intentRouter": {
+        "chat": "glm",
+        "research": "glm",
+        "planning": "glm",
+        "discussion": "glm",
+        "code_change": "codex",
+        "test_execution": "codex",
+        "repo_debug": "codex"
+      },
+      "boundaries": [
+        "GLM may decide, discuss, summarize, research, and create action contracts.",
+        "GLM must not directly write the repository, run shell commands, or commit.",
+        "Codex may edit files, run commands, test, and commit only after role_actions are approved.",
+        "Codex must not handle QQ social chat or personality watering.",
+        "Codex returns artifacts; GLM/CEO reports those artifacts to QQ."
+      ],
+      "productionConversationRuntime": {
+        "baseUrl": "https://sub2api.tengokukk.com/v1",
+        "model": "coze-shell",
+        "backingAccount": "coze-glm-proxy",
+        "platform": "glm",
+        "group": "Coze GLM"
+      },
+      "productionExecutionRuntime": {
+        "runtime": "builder-local-codex",
+        "entry": "approved role_actions claimed by Mortis dispatcher",
+        "worker": "codex exec"
+      }
+    },
+    "studioOS": {
+      "policy": "The next bottleneck is AI Studio Infrastructure: shared operational context, observability, artifacts, verification, and durable memory. Do not solve this by adding more persona prompt.",
+      "stateTable": "studio_state",
+      "artifactTable": "studio_artifacts",
+      "resourceTable": "studio_resources",
+      "currentStateKeys": [
+        "persona_layer",
+        "execution_layer",
+        "tester_runtime",
+        "ci_results",
+        "logs_monitoring",
+        "issue_tracker",
+        "watcher_ingestion",
+        "artifact_first_workflow",
+        "digital_human_behavior_layer"
+      ],
+      "priority": [
+        "P0 independent tester-local-verifier and reliable Builder branch handoff",
+        "P0 CI/log/monitoring readers",
+        "P1 shared operational state for active/blocked tasks",
+        "P1 artifact-first delivery through studio_artifacts and OpenList",
+        "P2 Watcher external ingestion jobs",
+        "P2 Digital Human Behavior Layer: feed, mood, saved items, emotion-driven sharing, OpenList media/file artifacts",
+        "P2 long-term organization memory and private LLM deliberation"
+      ],
+      "lifeRuntime": {
+        "policy": "Do not fake human behavior with random emojis or random files. Digital-human expression must come from continuous feed, mood/current interest, saved items, and a relevant sharing trigger.",
+        "tables": [
+          "agent_feed_items",
+          "agent_saved_items",
+          "agent_life_events"
+        ],
+        "currentStatus": "partial: QQ public feed capture and idle life pulses exist; external Bilibili/GitHub/blog/browser ingestion and QQ media/file sharing tools are still missing.",
+        "owners": {
+          "watcher": "continuous feed ingestion and research cards",
+          "builder": "technical repos/videos saved for implementation discussions",
+          "tester": "failure/testing memes and risk references",
+          "ceo": "daily studio summaries and direction-setting shares"
+        }
+      },
+      "truthRule": "Agents must cite real action, invocation, artifact, command, CI/log evidence, feed item, saved item, or explicit blocked reason. QQ discussion alone is not delivery."
+    },
+    "flow": [
+      "operator goal",
+      "manager role routes and requests approval",
+      "operator approval",
+      "dispatcher claims approved builder action",
+      "builder runtime clones repository into isolated work root",
+      "builder runtime creates feature branch",
+      "codex executes approved scope",
+      "builder commits local result",
+      "tester verifies independently",
+      "manager reports",
+      "operator decides merge or deploy"
+    ],
+    "sourceMap": {
+      "dispatcherLoop": "server/internal/roles/dispatcher.go",
+      "runtimeBoundary": "server/internal/roles/execution.go",
+      "builderRuntime": "server/internal/roles/builder_runtime.go",
+      "sqlStore": "server/internal/roles/sql_store.go",
+      "commandRunner": "server/internal/roles/runner.go",
+      "qqCompletionNotifier": "server/internal/qqbridge/notifier.go",
+      "qqInboundBridge": "server/internal/qqbridge/inbound.go",
+      "startupGate": "server/internal/roles/startup.go",
+      "serverWiring": "server/cmd/server/router.go"
+    },
+    "environment": {
+      "MORTIS_ROLE_DISPATCHER_ENABLED": "false by default; true starts dispatcher",
+      "MORTIS_ROLE_REPO_URL": "git@github.com:emptyinkpot/mortis-multica-source.git; production may use file:///source for local clone reliability",
+      "MORTIS_ROLE_LOCAL_REPO_PATH": "/srv/multica mounted read-only to /source when MORTIS_ROLE_REPO_URL=file:///source",
+      "MORTIS_ROLE_BASE_BRANCH": "main",
+      "MORTIS_AGENT_WORK_ROOT": "/srv/multica/agent-workspaces",
+      "MORTIS_CODEX_BIN": "codex",
+      "MORTIS_CODEX_TIMEOUT_SECONDS": "900",
+      "MORTIS_CODEX_DANGEROUSLY_BYPASS_SANDBOX": "false by default; production currently true because Docker host blocks Codex workspace-write user namespaces",
+      "MORTIS_ROLE_DISPATCH_INTERVAL_SECONDS": "2",
+      "MORTIS_ROLE_GIT_USER": "Mortis Builder AI",
+      "MORTIS_ROLE_GIT_EMAIL": "builder@mortis.local",
+      "MORTIS_QQ_NOTIFY_ENABLED": "false by default; true starts OneBot completion notifier",
+      "MORTIS_QQ_ONEBOT_HTTP_URL": "OneBot HTTP base URL for QQ outbound messages",
+      "MORTIS_QQ_ONEBOT_HTTP_URLS": "optional JSON or CSV map from OneBot self_id to OneBot HTTP URL; completion notifier uses the original receiving QQ when available",
+      "MORTIS_QQ_NOTIFY_TARGET_TYPE": "optional fallback target type: group or private",
+      "MORTIS_QQ_NOTIFY_TARGET_ID": "optional fallback group_id or user_id",
+      "MORTIS_QQ_INBOUND_ENABLED": "false by default; true enables /api/qq/onebot",
+      "MORTIS_QQ_INBOUND_SECRET": "optional shared secret for NapCat OneBot httpClients",
+      "MORTIS_QQ_INBOUND_WORKSPACE_SLUG": "workspace receiving QQ routed role messages",
+      "MORTIS_QQ_INBOUND_AUTO_APPROVE_LOW_RISK": "true auto-approves low-risk builder messages from QQ",
+      "MORTIS_QQ_BOT_USER_IDS": "comma-separated QQ UINs for bot accounts; inbound bridge ignores these senders to prevent bot-to-bot loops",
+      "MORTIS_QQ_INBOUND_CONVERSATION_KEY": "conversation_threads.external_thread_key for the company room; default company-room",
+      "MORTIS_QQ_LIVING_AGENTS_ENABLED": "false by default; true starts the QQ living agents polling runtime",
+      "MORTIS_QQ_LIVING_GROUP_ID": "QQ group id watched by the living agents runtime",
+      "MORTIS_QQ_LLM_BASE_URL": "conversation GLM gateway; production uses https://sub2api.tengokukk.com/v1",
+      "MORTIS_QQ_LLM_MODEL": "conversation GLM model; production uses coze-shell backed by coze-glm-proxy",
+      "MORTIS_QQ_CHAT_RUNTIME": "glm",
+      "MORTIS_QQ_RESEARCH_RUNTIME": "glm",
+      "MORTIS_QQ_PLANNING_RUNTIME": "glm",
+      "MORTIS_QQ_CODE_RUNTIME": "codex",
+      "MORTIS_QQ_TEST_RUNTIME": "codex",
+      "MORTIS_AI_CEO_ONEBOT_URL": "OneBot HTTP URL used by the CEO agent account",
+      "MORTIS_AI_BUILDER_ONEBOT_URL": "OneBot HTTP URL used by the Builder agent account",
+      "MORTIS_AI_TESTER_ONEBOT_URL": "OneBot HTTP URL used by the Tester agent account",
+      "MORTIS_AI_WATCHER_ONEBOT_URL": "OneBot HTTP URL used by the Watcher agent account"
+    },
+    "qqLoop": {
+      "entry": "POST /api/qq/onebot?secret=<secret> from NapCat OneBot httpClients, or POST /api/roles/route-message?workspace_slug=<slug> with channel=qq",
+      "productionAccounts": [
+        {
+          "key": "qq-1",
+          "container": "napcat-qq1",
+          "qq_uin": "3974470627",
+          "qq_name": "邪恶男娘爱好者",
+          "onebot_http": "http://napcat-qq1:3000",
+          "host_api": "http://127.0.0.1:3600",
+          "role": "current Mortis QQ inbound/outbound loop"
+        },
+        {
+          "key": "qq-2",
+          "container": "napcat-qq2",
+          "qq_uin": "3316734532",
+          "qq_name": "東風 ソラ",
+          "host_api": "http://127.0.0.1:3610",
+          "role": "registered NapCat account"
+        },
+        {
+          "key": "qq-3",
+          "container": "napcat-qq3",
+          "qq_uin": "3615811141",
+          "qq_name": "不吃香菜",
+          "host_api": "http://127.0.0.1:3620",
+          "role": "registered NapCat account"
+        },
+        {
+          "key": "qq-4",
+          "container": "napcat-qq4",
+          "qq_uin": "2264869713",
+          "qq_name": "法式长棍面包",
+          "host_api": "http://127.0.0.1:3630",
+          "role": "registered NapCat account with OneBot inbound configured"
+        }
+      ],
+      "targetMetadata": [
+        "metadata.qq_target_type",
+        "metadata.qq_target_id"
+      ],
+      "completion": "server/internal/qqbridge/notifier.go polls completed/failed/blocked role_invocations with execution_report and sends OneBot notification",
+      "replyLanguage": "Operator-facing QQ acknowledgements, internal summaries, and completion notifications default to Chinese; task body, commit metadata, and raw logs may preserve source language",
+      "dedupe": "role_invocations.result.qq_notified_at or qq_notify_skipped_at",
+      "verifiedFullLoop": {
+        "date": "2026-05-06",
+        "invocation": "beb904af-adc0-4af3-9c5c-ccb3ec7ef74d",
+        "action": "a3816956-f242-4e6e-a078-31eb037f7c2f",
+        "status": "completed",
+        "commit": "c054f682214832d2b2ae261913d6d3636e3afb9d",
+        "changed_files": [
+          "docs/company-room-e2e-2.md"
+        ],
+        "test": "git diff --check HEAD",
+        "company_room": "conversation_threads.external_thread_key=company-room",
+        "summary_sender": "CEO / Manager AI",
+        "latest_fix": "c1777f7 casts execution report conversation ids so SaveExecutionReport writes back to company-room reliably"
+      }
+    },
+    "organizationLayer": {
+      "status": "source-aligned-minimum-company-room",
+      "companyRoom": "conversation_threads.external_thread_key=company-room",
+      "messageTable": "conversation_messages",
+      "roles": [
+        "manager",
+        "builder",
+        "tester"
+      ],
+      "executionSummary": "SQLActionStore.SaveExecutionReport inserts a CEO / Manager AI message into the original conversation thread",
+      "futureTables": [
+        "role_conversation_members",
+        "qq_role_bindings",
+        "qq_operator_bindings"
+      ],
+      "verifiedDataFlow": "QQ -> company-room message -> Builder action -> workspace commit -> execution report -> company-room summary -> QQ reply"
+    },
+    "safetyBoundaries": [
+      "dispatcher is disabled unless explicitly enabled",
+      "dispatcher only claims approved role_actions for the built-in builder role",
+      "builder works in a fresh clone under MORTIS_AGENT_WORK_ROOT",
+      "builder creates mortis/action-<id> branch",
+      "builder commits locally but does not push main, merge, or deploy",
+      "tester verification remains independent",
+      "production deployment still requires operator or deploy gate"
+    ],
+    "acceptanceGates": [
+      "single approved builder action is automatically claimed and reaches running or completed",
+      "codex or test failure records failed or blocked without fake success",
+      "dispatcher can pick the next approved builder action after one finishes",
+      "FOR UPDATE SKIP LOCKED prevents duplicate claims when multiple dispatchers run",
+      "24h run has no stuck state, illegal transition, or automatic deploy"
+    ]
+  },
+  "installEntry": {
+    "developer": "make dev",
+    "setup": "make setup",
+    "start": "make start",
+    "stop": "make stop",
+    "check": "make check",
+    "selfHost": "make selfhost",
+    "selfHostStop": "make selfhost-stop",
+    "serverOnly": "make server",
+    "daemonRestart": "make daemon"
+  },
+  "installScripts": {
+    "windows": "scripts/install.ps1",
+    "unix": "scripts/install.sh",
+    "dev": "scripts/dev.sh"
+  },
+  "deploymentArtifacts": {
+    "daemonBinaryDeploy": "scripts/deploy-daemon-binary.sh",
+    "dockerComposeSelfHost": "docker-compose.selfhost.yml"
+  },
+  "deploymentEntrypoints": {
+    "canonical": [
+      "MORTIS_PRIVATE_DEPLOYMENT_NOTES.md",
+      "SELF_HOSTING.md",
+      "docker-compose.selfhost.yml",
+      "make selfhost",
+      "make deploy-daemon-binary"
+    ],
+    "compatibility": [
+      "CLI_AND_DAEMON.md#multica-setup-self-host",
+      "scripts/install.sh",
+      "scripts/install.ps1"
+    ],
+    "legacy": [
+      "https://golutra.tengokukk.com"
+    ]
+  },
+  "deploymentMode": "private-mortis-branding-on-multica-runtime-with-compose-and-daemon-binary-refresh",
+  "deploymentWorkflows": {
+    "ci": ".github/workflows/ci.yml",
+    "release": ".github/workflows/release.yml"
+  },
+  "monorepo": {
+    "apps": [
+      "apps/web",
+      "apps/desktop",
+      "apps/docs"
+    ],
+    "packages": [
+      "packages/core",
+      "packages/ui",
+      "packages/views"
+    ],
+    "backend": "server"
+  },
+  "architectureRules": {
+    "serverState": "React Query owns server state",
+    "clientState": "Zustand owns client-only state",
+    "packageBoundaries": [
+      "packages/core has no react-dom/localStorage/process.env",
+      "packages/ui has no @multica/core imports",
+      "packages/views has no direct next/* or react-router-dom imports",
+      "apps/web/platform is the Next.js adaptation layer"
+    ]
+  },
+  "forkCodename": "Mortis",
+  "upstream": {
+    "name": "Multica",
+    "repository": "https://github.com/multica-ai/multica",
+    "role": "upstream runtime foundation"
+  },
+  "downstream": {
+    "name": "Mortis",
+    "role": "private operator-runtime extension branch",
+    "repository": "https://github.com/emptyinkpot/mortis-multica-source"
+  },
+  "forkStatus": "private-multica-fork"
+}

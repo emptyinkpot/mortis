@@ -1,0 +1,3 @@
+-- This migration only updates roadmap priority metadata in studio_state.
+-- Down migration is intentionally a no-op because previous values are non-critical
+-- descriptive state and may have been edited by later operator decisions.

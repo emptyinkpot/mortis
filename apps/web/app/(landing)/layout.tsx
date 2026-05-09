@@ -1,8 +1,8 @@
 import { cookies, headers } from "next/headers";
 import { Instrument_Serif, Noto_Serif_SC } from "next/font/google";
-import { LOCALE_COOKIE } from "@multica/core/i18n";
 import { LocaleProvider } from "@/features/landing/i18n";
 import type { Locale } from "@/features/landing/i18n";
+import { getSiteUrl } from "@/lib/site-url";
 
 const instrumentSerif = Instrument_Serif({
   subsets: ["latin"],
@@ -21,17 +21,16 @@ const jsonLd = {
   "@graph": [
     {
       "@type": "Organization",
-      name: "Multica",
-      url: "https://www.multica.ai",
-      sameAs: ["https://github.com/multica-ai/multica"],
+      name: "Mortis",
+      url: getSiteUrl(),
     },
     {
       "@type": "SoftwareApplication",
-      name: "Multica",
+      name: "Mortis",
       applicationCategory: "ProjectManagement",
       operatingSystem: "Web",
       description:
-        "Open-source project management platform that turns coding agents into real teammates.",
+        "面向单一操作者与其 Agent 的私人指挥工作区。",
       offers: {
         "@type": "Offer",
         price: "0",
@@ -44,7 +43,7 @@ const jsonLd = {
 async function getInitialLocale(): Promise<Locale> {
   // 1. User's explicit preference (cookie set when they switch language)
   const cookieStore = await cookies();
-  const stored = cookieStore.get(LOCALE_COOKIE)?.value;
+  const stored = cookieStore.get("multica-locale")?.value;
   if (stored === "en" || stored === "zh") return stored;
 
   // 2. Detect from Accept-Language header
@@ -52,7 +51,7 @@ async function getInitialLocale(): Promise<Locale> {
   const acceptLang = headersList.get("accept-language") ?? "";
   if (acceptLang.includes("zh")) return "zh";
 
-  return "en";
+  return "zh";
 }
 
 export default async function LandingLayout({
@@ -68,7 +67,7 @@ export default async function LandingLayout({
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <div className={`${instrumentSerif.variable} ${notoSerifSC.variable} landing-light h-full overflow-x-hidden overflow-y-auto bg-white`}>
+      <div className={`${instrumentSerif.variable} ${notoSerifSC.variable} h-full overflow-x-hidden overflow-y-auto bg-white`}>
         <LocaleProvider initialLocale={initialLocale}>{children}</LocaleProvider>
       </div>
     </>

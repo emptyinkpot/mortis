@@ -1,0 +1,184 @@
+# Sanitized Codex CLI config snapshot from ASUS-KL workstation.
+# Snapshot date: 2026-04-23.
+#
+# This file intentionally keeps runtime shape and MCP registration order while
+# replacing secrets and machine-specific roots with placeholders.
+
+model_provider = "crs"
+model = "gpt-5.4"
+model_reasoning_effort = "high"
+preferred_auth_method = "apikey"
+
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
+windows_wsl_setup_acknowledged = true
+disable_response_storage = true
+
+[model_providers.crs]
+name = "crs"
+base_url = "http://127.0.0.1:4411/openai/v1"
+wire_api = "responses"
+requires_openai_auth = true
+
+[windows]
+sandbox = "unelevated"
+
+# BEGIN self-debug-closed-loop managed mcp servers
+
+[mcp_servers.chrome-devtools-mcp]
+command = "node"
+args = [ "<ATRAMENTI_CONSOLE_ROOT>\\codex\\mcps\\_shared\\mcp-local-runtime\\node_modules\\chrome-devtools-mcp\\build\\src\\bin\\chrome-devtools-mcp.js" ]
+
+[mcp_servers.cloud-repo-mcp]
+command = "node"
+args = [ "<ATRAMENTI_CONSOLE_ROOT>\\codex\\mcps\\cloud-repo-mcp\\server.mjs" ]
+startup_timeout_sec = 15
+
+[mcp_servers.cloud-repo-mcp.env]
+CLOUD_REPO_MCP_TRANSPORT = "stdio"
+
+[mcp_servers.dev-quality-mcp]
+command = "node"
+args = [ "<ATRAMENTI_CONSOLE_ROOT>\\codex\\mcps\\dev-quality-mcp\\server.mjs" ]
+startup_timeout_sec = 15
+
+[mcp_servers.dev-quality-mcp.env]
+DEV_QUALITY_MCP_TRANSPORT = "stdio"
+
+[mcp_servers.ripgrep-search]
+command = "node"
+args = [ "<ATRAMENTI_CONSOLE_ROOT>\\codex\\mcps\\ripgrep-search\\server.mjs" ]
+startup_timeout_sec = 15
+
+[mcp_servers.workspace-toolkit-mcp]
+command = "node"
+args = [ "<ATRAMENTI_CONSOLE_ROOT>\\codex\\mcps\\workspace-toolkit-mcp\\server.mjs" ]
+startup_timeout_sec = 15
+
+[mcp_servers.agent-runtime-mcp]
+command = "node"
+args = [ "<ATRAMENTI_CONSOLE_ROOT>\\codex\\mcps\\agent-runtime-mcp\\server.mjs" ]
+startup_timeout_sec = 15
+
+[mcp_servers.github-workflow-mcp]
+command = "node"
+args = [ "<ATRAMENTI_CONSOLE_ROOT>\\codex\\mcps\\github-workflow-mcp\\server.mjs" ]
+startup_timeout_sec = 15
+
+[mcp_servers.github-delivery-mcp]
+command = "node"
+args = [ "<ATRAMENTI_CONSOLE_ROOT>\\codex\\mcps\\github-delivery-mcp\\server.mjs" ]
+startup_timeout_sec = 15
+
+[mcp_servers.github-delivery-mcp.env]
+GITHUB_DELIVERY_ALLOWED_ROOTS = "<CODEX_HOME>;<PROJECTS_ROOT>"
+GITHUB_DELIVERY_OWNERSHIP_MAP_PATH = "<CODEX_HOME>\\REPO-OWNERSHIP-MAP.md"
+GITHUB_DELIVERY_WORKING_ROOT = "<CODEX_HOME>\\.tmp\\working-copies"
+
+[mcp_servers.frontend-patterns-mcp]
+command = "node"
+args = [ "<ATRAMENTI_CONSOLE_ROOT>\\codex\\mcps\\frontend-patterns-mcp\\server.mjs" ]
+startup_timeout_sec = 15
+
+[mcp_servers.fetch-mcp]
+command = "node"
+args = [ "<ATRAMENTI_CONSOLE_ROOT>\\codex\\mcps\\fetch-mcp\\server.mjs" ]
+startup_timeout_sec = 60
+
+[mcp_servers.markitdown-mcp]
+command = "node"
+args = [ "<ATRAMENTI_CONSOLE_ROOT>\\codex\\mcps\\markitdown-mcp\\server.mjs" ]
+startup_timeout_sec = 90
+
+[mcp_servers.database-ops-mcp]
+command = "node"
+args = [ "<ATRAMENTI_CONSOLE_ROOT>\\codex\\mcps\\database-ops-mcp\\server.mjs" ]
+startup_timeout_sec = 15
+
+[mcp_servers.chrome-devtools-mcp-wrapper]
+command = "node"
+args = [ "<ATRAMENTI_CONSOLE_ROOT>\\codex\\mcps\\chrome-devtools-mcp-wrapper\\server.mjs" ]
+
+[mcp_servers.context-store]
+command = "node"
+args = [ "<ATRAMENTI_CONSOLE_ROOT>\\codex\\mcps\\context-store\\server.mjs" ]
+
+[mcp_servers.context-store-reranker]
+command = "node"
+args = [ "<ATRAMENTI_CONSOLE_ROOT>\\codex\\mcps\\context-store\\reranker\\server.mjs" ]
+
+[mcp_servers.core-qmd-dist-src-mcp]
+command = "node"
+args = [ "<ATRAMENTI_CONSOLE_ROOT>\\codex\\mcps\\core\\qmd\\dist\\src\\mcp\\server.js" ]
+
+[mcp_servers.drawio-diagrams]
+command = "node"
+args = [ "<ATRAMENTI_CONSOLE_ROOT>\\codex\\mcps\\drawio-diagrams\\server.mjs" ]
+
+[mcp_servers.experience-mcp]
+command = "node"
+args = [ "<ATRAMENTI_CONSOLE_ROOT>\\codex\\mcps\\experience\\mcp\\server.mjs" ]
+
+[mcp_servers.log-diagnose]
+command = "node"
+args = [ "<ATRAMENTI_CONSOLE_ROOT>\\codex\\mcps\\log-diagnose\\server.mjs" ]
+
+[mcp_servers.media-video-ffmpeg-mcp]
+command = "node"
+args = [ "<ATRAMENTI_CONSOLE_ROOT>\\codex\\mcps\\media\\video\\ffmpeg-mcp\\server.mjs" ]
+
+[mcp_servers.media-video-video-audio-mcp]
+command = "node"
+args = [ "<ATRAMENTI_CONSOLE_ROOT>\\codex\\mcps\\media\\video\\video-audio-mcp\\server.mjs" ]
+
+[mcp_servers.media-video-yt-dlp-mcp]
+command = "node"
+args = [ "<ATRAMENTI_CONSOLE_ROOT>\\codex\\mcps\\media\\video\\yt-dlp-mcp\\server.mjs" ]
+
+[mcp_servers.orchestration-pipeline]
+command = "node"
+args = [ "<ATRAMENTI_CONSOLE_ROOT>\\codex\\mcps\\orchestration-pipeline\\server.mjs" ]
+
+[mcp_servers.output-guard]
+command = "node"
+args = [ "<ATRAMENTI_CONSOLE_ROOT>\\codex\\mcps\\output-guard\\server.mjs" ]
+
+[mcp_servers.plantuml-diagrams]
+command = "node"
+args = [ "<ATRAMENTI_CONSOLE_ROOT>\\codex\\mcps\\plantuml-diagrams\\server.mjs" ]
+
+[mcp_servers.playwright-browser]
+command = "node"
+args = [ "<ATRAMENTI_CONSOLE_ROOT>\\codex\\mcps\\playwright-browser\\server.mjs" ]
+
+[mcp_servers.prompt-compressor]
+command = "node"
+args = [ "<ATRAMENTI_CONSOLE_ROOT>\\codex\\mcps\\prompt-compressor\\server.mjs" ]
+
+[mcp_servers.repo-inspector]
+command = "node"
+args = [ "<ATRAMENTI_CONSOLE_ROOT>\\codex\\mcps\\repo-inspector\\server.mjs" ]
+
+[mcp_servers.standards-guard]
+command = "node"
+args = [ "<ATRAMENTI_CONSOLE_ROOT>\\codex\\mcps\\standards-guard\\server.mjs" ]
+
+[mcp_servers.github]
+url = "https://api.githubcopilot.com/mcp/"
+bearer_token_env_var = "GITHUB_PAT_TOKEN"
+
+[mcp_servers.pencil]
+command = "<ATRAMENTI_CONSOLE_ROOT>\\codex\\.pencil\\mcp\\visual_studio_code\\out\\mcp-server-windows-x64.exe"
+args = [ "--app", "visual_studio_code" ]
+
+[projects.'<PROJECTS_ROOT>']
+trust_level = "trusted"
+
+[projects.'<USER_HOME>']
+trust_level = "trusted"
+
+[features]
+tool_suggest = false
+apps = false
+
+# END self-debug-closed-loop managed mcp servers

@@ -1,0 +1,10 @@
+DROP TABLE IF EXISTS audit_events;
+DROP TABLE IF EXISTS approval_requests;
+DROP TABLE IF EXISTS role_actions;
+DROP TABLE IF EXISTS role_invocations;
+DROP TABLE IF EXISTS conversation_messages;
+DROP TABLE IF EXISTS conversation_threads;
+DROP TABLE IF EXISTS role_runtime_bindings;
+DROP TABLE IF EXISTS role_channels;
+DROP TABLE IF EXISTS role_permissions;
+DROP TABLE IF EXISTS roles;

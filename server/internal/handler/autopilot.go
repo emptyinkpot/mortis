@@ -22,19 +22,22 @@ func computeNextRun(cronExpr, timezone string) (time.Time, error) {
 // ── Response types ──────────────────────────────────────────────────────────
 
 type AutopilotResponse struct {
-	ID                 string  `json:"id"`
-	WorkspaceID        string  `json:"workspace_id"`
-	Title              string  `json:"title"`
-	Description        *string `json:"description"`
-	AssigneeID         string  `json:"assignee_id"`
-	Status             string  `json:"status"`
-	ExecutionMode      string  `json:"execution_mode"`
-	IssueTitleTemplate *string `json:"issue_title_template"`
-	CreatedByType      string  `json:"created_by_type"`
-	CreatedByID        string  `json:"created_by_id"`
-	LastRunAt          *string `json:"last_run_at"`
-	CreatedAt          string  `json:"created_at"`
-	UpdatedAt          string  `json:"updated_at"`
+	ID                 string          `json:"id"`
+	WorkspaceID        string          `json:"workspace_id"`
+	ProjectID          *string         `json:"project_id"`
+	Title              string          `json:"title"`
+	Description        *string         `json:"description"`
+	AssigneeID         string          `json:"assignee_id"`
+	Priority           string          `json:"priority"`
+	Status             string          `json:"status"`
+	ExecutionMode      string          `json:"execution_mode"`
+	IssueTitleTemplate *string         `json:"issue_title_template"`
+	CreatedByType      string          `json:"created_by_type"`
+	CreatedByID        string          `json:"created_by_id"`
+	LastRunAt          *string         `json:"last_run_at"`
+	CreatedAt          string          `json:"created_at"`
+	UpdatedAt          string          `json:"updated_at"`
+	TaskContext        json.RawMessage `json:"task_context,omitempty"`
 }
 
 type AutopilotTriggerResponse struct {
@@ -74,9 +77,11 @@ func autopilotToResponse(a db.Autopilot) AutopilotResponse {
 	return AutopilotResponse{
 		ID:                 uuidToString(a.ID),
 		WorkspaceID:        uuidToString(a.WorkspaceID),
+		ProjectID:          uuidToPtr(a.ProjectID),
 		Title:              a.Title,
 		Description:        textToPtr(a.Description),
 		AssigneeID:         uuidToString(a.AssigneeID),
+		Priority:           a.Priority,
 		Status:             a.Status,
 		ExecutionMode:      a.ExecutionMode,
 		IssueTitleTemplate: textToPtr(a.IssueTitleTemplate),
@@ -85,6 +90,7 @@ func autopilotToResponse(a db.Autopilot) AutopilotResponse {
 		LastRunAt:          timestampToPtr(a.LastRunAt),
 		CreatedAt:          timestampToString(a.CreatedAt),
 		UpdatedAt:          timestampToString(a.UpdatedAt),
+		TaskContext:        json.RawMessage(a.TaskContext),
 	}
 }
 
@@ -134,20 +140,26 @@ func runToResponse(r db.AutopilotRun) AutopilotRunResponse {
 // ── Request types ───────────────────────────────────────────────────────────
 
 type CreateAutopilotRequest struct {
-	Title              string  `json:"title"`
-	Description        *string `json:"description"`
-	AssigneeID         string  `json:"assignee_id"`
-	ExecutionMode      string  `json:"execution_mode"`
-	IssueTitleTemplate *string `json:"issue_title_template"`
+	Title              string          `json:"title"`
+	Description        *string         `json:"description"`
+	AssigneeID         string          `json:"assignee_id"`
+	ProjectID          *string         `json:"project_id"`
+	Priority           string          `json:"priority"`
+	ExecutionMode      string          `json:"execution_mode"`
+	IssueTitleTemplate *string         `json:"issue_title_template"`
+	TaskContext        json.RawMessage `json:"task_context,omitempty"`
 }
 
 type UpdateAutopilotRequest struct {
-	Title              *string `json:"title"`
-	Description        *string `json:"description"`
-	AssigneeID         *string `json:"assignee_id"`
-	Status             *string `json:"status"`
-	ExecutionMode      *string `json:"execution_mode"`
-	IssueTitleTemplate *string `json:"issue_title_template"`
+	Title              *string         `json:"title"`
+	Description        *string         `json:"description"`
+	AssigneeID         *string         `json:"assignee_id"`
+	ProjectID          *string         `json:"project_id"`
+	Priority           *string         `json:"priority"`
+	Status             *string         `json:"status"`
+	ExecutionMode      *string         `json:"execution_mode"`
+	IssueTitleTemplate *string         `json:"issue_title_template"`
+	TaskContext        json.RawMessage `json:"task_context,omitempty"`
 }
 
 type CreateAutopilotTriggerRequest struct {
@@ -194,8 +206,12 @@ func (h *Handler) GetAutopilot(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	workspaceID := h.resolveWorkspaceID(r)
 
-	autopilot, ok := h.loadAutopilotInWorkspace(w, r, id, workspaceID)
-	if !ok {
+	autopilot, err := h.Queries.GetAutopilotInWorkspace(r.Context(), db.GetAutopilotInWorkspaceParams{
+		ID:          parseUUID(id),
+		WorkspaceID: parseUUID(workspaceID),
+	})
+	if err != nil {
+		writeError(w, http.StatusNotFound, "autopilot not found")
 		return
 	}
 
@@ -217,30 +233,10 @@ func (h *Handler) GetAutopilot(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *Handler) loadAutopilotInWorkspace(w http.ResponseWriter, r *http.Request, autopilotID, workspaceID string) (db.Autopilot, bool) {
-	autopilotUUID, ok := parseUUIDOrBadRequest(w, autopilotID, "autopilot id")
-	if !ok {
-		return db.Autopilot{}, false
-	}
-	wsUUID, ok := parseUUIDOrBadRequest(w, workspaceID, "workspace id")
-	if !ok {
-		return db.Autopilot{}, false
-	}
-
-	autopilot, err := h.Queries.GetAutopilotInWorkspace(r.Context(), db.GetAutopilotInWorkspaceParams{
-		ID:          autopilotUUID,
-		WorkspaceID: wsUUID,
-	})
-	if err != nil {
-		writeError(w, http.StatusNotFound, "autopilot not found")
-		return db.Autopilot{}, false
-	}
-	return autopilot, true
-}
-
 func (h *Handler) CreateAutopilot(w http.ResponseWriter, r *http.Request) {
 	var req CreateAutopilotRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	rawFields, err := decodeJSONBodyWithRawFields(r.Body, &req)
+	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
@@ -267,35 +263,47 @@ func (h *Handler) CreateAutopilot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	assigneeUUID, ok := parseUUIDOrBadRequest(w, req.AssigneeID, "assignee_id")
-	if !ok {
-		return
-	}
-	wsUUID, ok := parseUUIDOrBadRequest(w, workspaceID, "workspace id")
-	if !ok {
-		return
-	}
-
 	// Validate assignee is an agent in the workspace.
-	_, err := h.Queries.GetAgentInWorkspace(r.Context(), db.GetAgentInWorkspaceParams{
-		ID:          assigneeUUID,
-		WorkspaceID: wsUUID,
+	_, err = h.Queries.GetAgentInWorkspace(r.Context(), db.GetAgentInWorkspaceParams{
+		ID:          parseUUID(req.AssigneeID),
+		WorkspaceID: parseUUID(workspaceID),
 	})
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "assignee must be a valid agent in this workspace")
 		return
 	}
 
+	priority := req.Priority
+	if priority == "" {
+		priority = "none"
+	}
+
+	var projectID pgtype.UUID
+	if req.ProjectID != nil {
+		projectID = parseUUID(*req.ProjectID)
+	}
+	var taskContext json.RawMessage
+	if _, ok := rawFields["task_context"]; ok {
+		taskContext, err = normalizeOptionalJSONObject(req.TaskContext)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "task_context must be valid JSON")
+			return
+		}
+	}
+
 	autopilot, err := h.Queries.CreateAutopilot(r.Context(), db.CreateAutopilotParams{
-		WorkspaceID:        wsUUID,
+		WorkspaceID:        parseUUID(workspaceID),
 		Title:              req.Title,
-		AssigneeID:         assigneeUUID,
+		AssigneeID:         parseUUID(req.AssigneeID),
+		Priority:           priority,
 		Status:             "active",
 		ExecutionMode:      req.ExecutionMode,
 		CreatedByType:      "member",
 		CreatedByID:        parseUUID(userID),
+		ProjectID:          projectID,
 		Description:        ptrToText(req.Description),
 		IssueTitleTemplate: ptrToText(req.IssueTitleTemplate),
+		TaskContext:        taskContext,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create autopilot")
@@ -311,8 +319,12 @@ func (h *Handler) UpdateAutopilot(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	workspaceID := h.resolveWorkspaceID(r)
 
-	prev, ok := h.loadAutopilotInWorkspace(w, r, id, workspaceID)
-	if !ok {
+	prev, err := h.Queries.GetAutopilotInWorkspace(r.Context(), db.GetAutopilotInWorkspaceParams{
+		ID:          parseUUID(id),
+		WorkspaceID: parseUUID(workspaceID),
+	})
+	if err != nil {
+		writeError(w, http.StatusNotFound, "autopilot not found")
 		return
 	}
 
@@ -338,10 +350,15 @@ func (h *Handler) UpdateAutopilot(w http.ResponseWriter, r *http.Request) {
 		ID:                 prev.ID,
 		Description:        prev.Description,
 		AssigneeID:         prev.AssigneeID,
+		ProjectID:          prev.ProjectID,
 		IssueTitleTemplate: prev.IssueTitleTemplate,
+		TaskContext:        prev.TaskContext,
 	}
 	if req.Title != nil {
 		params.Title = pgtype.Text{String: *req.Title, Valid: true}
+	}
+	if req.Priority != nil {
+		params.Priority = pgtype.Text{String: *req.Priority, Valid: true}
 	}
 	if req.Status != nil {
 		params.Status = pgtype.Text{String: *req.Status, Valid: true}
@@ -355,20 +372,31 @@ func (h *Handler) UpdateAutopilot(w http.ResponseWriter, r *http.Request) {
 	if _, ok := rawFields["issue_title_template"]; ok {
 		params.IssueTitleTemplate = ptrToText(req.IssueTitleTemplate)
 	}
+	if _, ok := rawFields["task_context"]; ok {
+		taskContext, err := normalizeOptionalJSONObject(req.TaskContext)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "task_context must be valid JSON")
+			return
+		}
+		params.TaskContext = taskContext
+	}
 	if _, ok := rawFields["assignee_id"]; ok {
 		if req.AssigneeID != nil {
-			assigneeUUID, ok := parseUUIDOrBadRequest(w, *req.AssigneeID, "assignee_id")
-			if !ok {
-				return
-			}
 			if _, err := h.Queries.GetAgentInWorkspace(r.Context(), db.GetAgentInWorkspaceParams{
-				ID:          assigneeUUID,
-				WorkspaceID: prev.WorkspaceID,
+				ID:          parseUUID(*req.AssigneeID),
+				WorkspaceID: parseUUID(workspaceID),
 			}); err != nil {
 				writeError(w, http.StatusBadRequest, "assignee must be a valid agent in this workspace")
 				return
 			}
-			params.AssigneeID = assigneeUUID
+			params.AssigneeID = parseUUID(*req.AssigneeID)
+		}
+	}
+	if _, ok := rawFields["project_id"]; ok {
+		if req.ProjectID != nil {
+			params.ProjectID = parseUUID(*req.ProjectID)
+		} else {
+			params.ProjectID = pgtype.UUID{Valid: false}
 		}
 	}
 
@@ -387,18 +415,9 @@ func (h *Handler) DeleteAutopilot(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	workspaceID := h.resolveWorkspaceID(r)
 
-	idUUID, ok := parseUUIDOrBadRequest(w, id, "autopilot id")
-	if !ok {
-		return
-	}
-	wsUUID, ok := parseUUIDOrBadRequest(w, workspaceID, "workspace id")
-	if !ok {
-		return
-	}
-
 	if _, err := h.Queries.GetAutopilotInWorkspace(r.Context(), db.GetAutopilotInWorkspaceParams{
-		ID:          idUUID,
-		WorkspaceID: wsUUID,
+		ID:          parseUUID(id),
+		WorkspaceID: parseUUID(workspaceID),
 	}); err != nil {
 		writeError(w, http.StatusNotFound, "autopilot not found")
 		return
@@ -409,12 +428,12 @@ func (h *Handler) DeleteAutopilot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.Queries.DeleteAutopilot(r.Context(), idUUID); err != nil {
+	if err := h.Queries.DeleteAutopilot(r.Context(), parseUUID(id)); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete autopilot")
 		return
 	}
 
-	h.publish(protocol.EventAutopilotDeleted, workspaceID, "member", userID, map[string]any{"autopilot_id": uuidToString(idUUID)})
+	h.publish(protocol.EventAutopilotDeleted, workspaceID, "member", userID, map[string]any{"autopilot_id": id})
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -424,8 +443,12 @@ func (h *Handler) CreateAutopilotTrigger(w http.ResponseWriter, r *http.Request)
 	autopilotID := chi.URLParam(r, "id")
 	workspaceID := h.resolveWorkspaceID(r)
 
-	ap, ok := h.loadAutopilotInWorkspace(w, r, autopilotID, workspaceID)
-	if !ok {
+	ap, err := h.Queries.GetAutopilotInWorkspace(r.Context(), db.GetAutopilotInWorkspaceParams{
+		ID:          parseUUID(autopilotID),
+		WorkspaceID: parseUUID(workspaceID),
+	})
+	if err != nil {
+		writeError(w, http.StatusNotFound, "autopilot not found")
 		return
 	}
 
@@ -485,7 +508,7 @@ func (h *Handler) CreateAutopilotTrigger(w http.ResponseWriter, r *http.Request)
 	resp := triggerToResponse(trigger)
 	userID, _ := requireUserID(w, r)
 	h.publish(protocol.EventAutopilotUpdated, workspaceID, "member", userID, map[string]any{
-		"autopilot_id": uuidToString(ap.ID),
+		"autopilot_id": autopilotID,
 		"trigger":      resp,
 	})
 	writeJSON(w, http.StatusCreated, resp)
@@ -496,18 +519,17 @@ func (h *Handler) UpdateAutopilotTrigger(w http.ResponseWriter, r *http.Request)
 	triggerID := chi.URLParam(r, "triggerId")
 	workspaceID := h.resolveWorkspaceID(r)
 
-	ap, ok := h.loadAutopilotInWorkspace(w, r, autopilotID, workspaceID)
-	if !ok {
+	// Verify autopilot belongs to workspace.
+	if _, err := h.Queries.GetAutopilotInWorkspace(r.Context(), db.GetAutopilotInWorkspaceParams{
+		ID:          parseUUID(autopilotID),
+		WorkspaceID: parseUUID(workspaceID),
+	}); err != nil {
+		writeError(w, http.StatusNotFound, "autopilot not found")
 		return
 	}
 
-	triggerUUID, ok := parseUUIDOrBadRequest(w, triggerID, "trigger id")
-	if !ok {
-		return
-	}
-
-	prev, err := h.Queries.GetAutopilotTrigger(r.Context(), triggerUUID)
-	if err != nil || uuidToString(prev.AutopilotID) != uuidToString(ap.ID) {
+	prev, err := h.Queries.GetAutopilotTrigger(r.Context(), parseUUID(triggerID))
+	if err != nil || uuidToString(prev.AutopilotID) != autopilotID {
 		writeError(w, http.StatusNotFound, "trigger not found")
 		return
 	}
@@ -574,7 +596,7 @@ func (h *Handler) UpdateAutopilotTrigger(w http.ResponseWriter, r *http.Request)
 	resp := triggerToResponse(trigger)
 	userID, _ := requireUserID(w, r)
 	h.publish(protocol.EventAutopilotUpdated, workspaceID, "member", userID, map[string]any{
-		"autopilot_id": uuidToString(ap.ID),
+		"autopilot_id": autopilotID,
 		"trigger":      resp,
 	})
 	writeJSON(w, http.StatusOK, resp)
@@ -585,29 +607,16 @@ func (h *Handler) DeleteAutopilotTrigger(w http.ResponseWriter, r *http.Request)
 	triggerID := chi.URLParam(r, "triggerId")
 	workspaceID := h.resolveWorkspaceID(r)
 
-	autopilotUUID, ok := parseUUIDOrBadRequest(w, autopilotID, "autopilot id")
-	if !ok {
-		return
-	}
-	triggerUUID, ok := parseUUIDOrBadRequest(w, triggerID, "trigger id")
-	if !ok {
-		return
-	}
-	wsUUID, ok := parseUUIDOrBadRequest(w, workspaceID, "workspace id")
-	if !ok {
-		return
-	}
-
 	if _, err := h.Queries.GetAutopilotInWorkspace(r.Context(), db.GetAutopilotInWorkspaceParams{
-		ID:          autopilotUUID,
-		WorkspaceID: wsUUID,
+		ID:          parseUUID(autopilotID),
+		WorkspaceID: parseUUID(workspaceID),
 	}); err != nil {
 		writeError(w, http.StatusNotFound, "autopilot not found")
 		return
 	}
 
-	trigger, err := h.Queries.GetAutopilotTrigger(r.Context(), triggerUUID)
-	if err != nil || uuidToString(trigger.AutopilotID) != uuidToString(autopilotUUID) {
+	trigger, err := h.Queries.GetAutopilotTrigger(r.Context(), parseUUID(triggerID))
+	if err != nil || uuidToString(trigger.AutopilotID) != autopilotID {
 		writeError(w, http.StatusNotFound, "trigger not found")
 		return
 	}
@@ -617,14 +626,14 @@ func (h *Handler) DeleteAutopilotTrigger(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if err := h.Queries.DeleteAutopilotTrigger(r.Context(), triggerUUID); err != nil {
+	if err := h.Queries.DeleteAutopilotTrigger(r.Context(), parseUUID(triggerID)); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete trigger")
 		return
 	}
 
 	h.publish(protocol.EventAutopilotUpdated, workspaceID, "member", userID, map[string]any{
-		"autopilot_id": uuidToString(autopilotUUID),
-		"trigger_id":   uuidToString(triggerUUID),
+		"autopilot_id": autopilotID,
+		"trigger_id":   triggerID,
 	})
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -635,8 +644,11 @@ func (h *Handler) ListAutopilotRuns(w http.ResponseWriter, r *http.Request) {
 	autopilotID := chi.URLParam(r, "id")
 	workspaceID := h.resolveWorkspaceID(r)
 
-	autopilot, ok := h.loadAutopilotInWorkspace(w, r, autopilotID, workspaceID)
-	if !ok {
+	if _, err := h.Queries.GetAutopilotInWorkspace(r.Context(), db.GetAutopilotInWorkspaceParams{
+		ID:          parseUUID(autopilotID),
+		WorkspaceID: parseUUID(workspaceID),
+	}); err != nil {
+		writeError(w, http.StatusNotFound, "autopilot not found")
 		return
 	}
 
@@ -657,7 +669,7 @@ func (h *Handler) ListAutopilotRuns(w http.ResponseWriter, r *http.Request) {
 	}
 
 	runs, err := h.Queries.ListAutopilotRuns(r.Context(), db.ListAutopilotRunsParams{
-		AutopilotID: autopilot.ID,
+		AutopilotID: parseUUID(autopilotID),
 		Limit:       limit,
 		Offset:      offset,
 	})
@@ -679,8 +691,12 @@ func (h *Handler) TriggerAutopilot(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	workspaceID := h.resolveWorkspaceID(r)
 
-	autopilot, ok := h.loadAutopilotInWorkspace(w, r, id, workspaceID)
-	if !ok {
+	autopilot, err := h.Queries.GetAutopilotInWorkspace(r.Context(), db.GetAutopilotInWorkspaceParams{
+		ID:          parseUUID(id),
+		WorkspaceID: parseUUID(workspaceID),
+	})
+	if err != nil {
+		writeError(w, http.StatusNotFound, "autopilot not found")
 		return
 	}
 	if autopilot.Status != "active" {

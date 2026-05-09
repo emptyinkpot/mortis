@@ -8,14 +8,34 @@ import { pipeline } from "stream/promises";
 import { tmpdir } from "os";
 import { Readable } from "stream";
 
-import { selectPlatformReleaseAssetName } from "./cli-release-asset";
-
-// Desktop prefers the bundled `multica` CLI shipped inside the app for
-// same-repo builds, but it can also repair or bootstrap a managed copy in
-// userData on first launch when the bundled binary is missing or unusable.
+// Desktop bootstraps its own copy of the `multica` CLI into userData on first
+// launch, so users never have to brew-install anything. Build-time decoupled:
+// we don't bundle the binary into the .app, we download whatever the upstream
+// release is at first run.
 
 const GITHUB_LATEST_BASE =
   "https://github.com/multica-ai/multica/releases/latest/download";
+
+function platformAssetName(): string {
+  const osMap: Record<string, string> = {
+    darwin: "darwin",
+    linux: "linux",
+    win32: "windows",
+  };
+  const archMap: Record<string, string> = {
+    x64: "amd64",
+    arm64: "arm64",
+  };
+  const os = osMap[process.platform];
+  const arch = archMap[process.arch];
+  if (!os || !arch) {
+    throw new Error(
+      `unsupported platform for CLI auto-install: ${process.platform}/${process.arch}`,
+    );
+  }
+  const ext = process.platform === "win32" ? "zip" : "tar.gz";
+  return `multica_${os}_${arch}.${ext}`;
+}
 
 function binaryName(): string {
   return process.platform === "win32" ? "multica.exe" : "multica";
@@ -72,8 +92,14 @@ async function sha256OfFile(path: string): Promise<string> {
 async function verifyChecksum(
   archivePath: string,
   assetName: string,
-  expected: string,
 ): Promise<void> {
+  const checksums = await fetchChecksums();
+  const expected = checksums.get(assetName);
+  if (!expected) {
+    throw new Error(
+      `no checksum for ${assetName} in checksums.txt — refusing to install unverified binary`,
+    );
+  }
   const actual = await sha256OfFile(archivePath);
   if (actual.toLowerCase() !== expected) {
     throw new Error(
@@ -92,14 +118,7 @@ async function extractArchive(archive: string, dest: string): Promise<void> {
 
 async function installFresh(): Promise<string> {
   const target = managedCliPath();
-  const checksums = await fetchChecksums();
-  const assetName = selectPlatformReleaseAssetName(checksums.keys());
-  const expectedChecksum = checksums.get(assetName);
-  if (!expectedChecksum) {
-    throw new Error(
-      `no checksum for ${assetName} in checksums.txt — refusing to install unverified binary`,
-    );
-  }
+  const assetName = platformAssetName();
   const url = `${GITHUB_LATEST_BASE}/${assetName}`;
 
   const workDir = join(tmpdir(), `multica-cli-${Date.now()}`);
@@ -111,7 +130,7 @@ async function installFresh(): Promise<string> {
     await downloadToFile(url, archivePath);
 
     console.log(`[cli-bootstrap] verifying ${assetName} against checksums.txt`);
-    await verifyChecksum(archivePath, assetName, expectedChecksum);
+    await verifyChecksum(archivePath, assetName);
 
     console.log(`[cli-bootstrap] extracting ${assetName}`);
     await extractArchive(archivePath, workDir);
@@ -124,7 +143,6 @@ async function installFresh(): Promise<string> {
     }
 
     await mkdir(dirname(target), { recursive: true });
-    await rm(target, { force: true }).catch(() => {});
     await rename(extractedBin, target);
     await chmod(target, 0o755);
 
@@ -148,10 +166,8 @@ async function installFresh(): Promise<string> {
  * the managed userData location, returns it immediately. Otherwise downloads
  * the latest release asset for the current platform and installs it.
  */
-export async function ensureManagedCli(
-  options: { forceInstall?: boolean } = {},
-): Promise<string> {
+export async function ensureManagedCli(): Promise<string> {
   const target = managedCliPath();
-  if (existsSync(target) && !options.forceInstall) return target;
+  if (existsSync(target)) return target;
   return installFresh();
 }

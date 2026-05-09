@@ -6,7 +6,6 @@ import { Button } from "@multica/ui/components/ui/button";
 import { Textarea } from "@multica/ui/components/ui/textarea";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@multica/ui/components/ui/tooltip";
 import { Markdown } from "../../common/markdown";
-import { useT } from "../../i18n";
 
 function isMarkdown(path: string) {
   return path.endsWith(".md") || path.endsWith(".mdx");
@@ -88,7 +87,6 @@ export function FileViewer({
   content: string;
   onChange: (content: string) => void;
 }) {
-  const { t } = useT("skills");
   const [editing, setEditing] = useState(false);
   const isMd = isMarkdown(path);
 
@@ -124,9 +122,7 @@ export function FileViewer({
                 }
               />
               <TooltipContent>
-                {editing
-                  ? t(($) => $.file_viewer.preview_tooltip)
-                  : t(($) => $.file_viewer.edit_tooltip)}
+                {editing ? "Preview" : "Edit"}
               </TooltipContent>
             </Tooltip>
           )}
@@ -139,7 +135,7 @@ export function FileViewer({
           <div className="p-6">
             {frontmatter && <FrontmatterCard data={frontmatter} />}
             <Markdown mode="full">
-              {body || t(($) => $.file_viewer.no_content)}
+              {body || "*No content yet*"}
             </Markdown>
           </div>
         ) : (
@@ -148,8 +144,8 @@ export function FileViewer({
             onChange={(e) => onChange(e.target.value)}
             placeholder={
               isMd
-                ? t(($) => $.file_viewer.markdown_placeholder)
-                : t(($) => $.file_viewer.raw_placeholder)
+                ? "Write markdown content..."
+                : "File content..."
             }
             className="h-full min-h-full resize-none rounded-none border-0 font-mono text-sm leading-relaxed focus-visible:ring-0"
           />

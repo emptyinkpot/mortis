@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mortis.local/contracts/agent-timeline-event.schema.json",
+  "title": "Mortis Agent Timeline Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["time", "agent", "event", "task"],
+  "properties": {
+    "time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "agent": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "event": {
+      "type": "string",
+      "enum": [
+        "claim.created",
+        "claim.updated",
+        "claim.blocked",
+        "claim.handoff",
+        "claim.completed",
+        "lock.created",
+        "lock.released",
+        "delegation.requested",
+        "delegation.accepted",
+        "artifact.created",
+        "review.requested",
+        "review.completed"
+      ]
+    },
+    "task": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "paths": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true
+    },
+    "artifact_refs": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true
+    },
+    "message": {
+      "type": "string"
+    }
+  }
+}

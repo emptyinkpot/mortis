@@ -1,4 +1,17 @@
+---
+title: Codex sandbox troubleshooting
+status: troubleshooting
+audience: operators and contributors
+scope: codex sandbox dns troubleshooting
+---
+
 # Codex sandbox troubleshooting (macOS `no such host`)
+
+> Scope note: this file is a troubleshooting note for a specific sandbox /
+> networking failure mode.
+> It is not a current-state control-plane or deployment-truth document.
+> Command examples and diagnostics here should be read as targeted troubleshooting
+> guidance, not as canonical Mortis runtime configuration.
 
 This doc explains the failure mode that caused [MUL-963][mul-963] and the
 matrix the daemon now follows when writing Codex's per-task `config.toml`.

@@ -512,41 +512,6 @@ func TestCommentTriggerThreadInheritedMention(t *testing.T) {
 	})
 }
 
-// TestDeleteCommentCancelsTriggeredTasks verifies that deleting a comment
-// also cancels any active tasks that were triggered by it. Without this,
-// the daemon would still claim the queued task after the FK SET NULL
-// nullified its trigger_comment_id, and the agent would either run with a
-// stale prompt (race during claim) or with a generic "you are assigned"
-// prompt that has no record of the now-deleted user request — both of
-// which manifest as "the agent still sees the deleted comment".
-func TestDeleteCommentCancelsTriggeredTasks(t *testing.T) {
-	agentID := getAgentID(t)
-	issueID := createIssueAssignedToAgent(t, "Delete-comment cancels task test", agentID)
-	t.Cleanup(func() {
-		clearTasks(t, issueID)
-		resp := authRequest(t, "DELETE", "/api/issues/"+issueID, nil)
-		resp.Body.Close()
-	})
-
-	t.Run("deleting trigger comment cancels its queued task", func(t *testing.T) {
-		clearTasks(t, issueID)
-		commentID := postComment(t, issueID, "Please fix this bug", nil)
-		if n := countPendingTasks(t, issueID); n != 1 {
-			t.Fatalf("expected 1 pending task before delete, got %d", n)
-		}
-
-		resp := authRequest(t, "DELETE", "/api/comments/"+commentID, nil)
-		resp.Body.Close()
-		if resp.StatusCode != http.StatusNoContent {
-			t.Fatalf("DeleteComment: expected 204, got %d", resp.StatusCode)
-		}
-
-		if n := countPendingTasks(t, issueID); n != 0 {
-			t.Errorf("expected 0 pending tasks after deleting trigger comment, got %d", n)
-		}
-	})
-}
-
 // TestCommentTriggerCoalescing verifies that rapid-fire comments don't create
 // duplicate tasks (coalescing dedup).
 func TestCommentTriggerCoalescing(t *testing.T) {
@@ -594,5 +559,127 @@ func TestCommentTriggerMentionAssigneeDoneIssue(t *testing.T) {
 
 	if n := countPendingTasks(t, issueID); n != 1 {
 		t.Errorf("expected 1 pending task after @mention of assignee on done issue, got %d", n)
+	}
+}
+
+func TestIssueStatusTerminalHandoffQueuesTargetIssue(t *testing.T) {
+	testCases := []struct {
+		name                string
+		targetInitialStatus string
+	}{
+		{name: "todo target queues directly", targetInitialStatus: "todo"},
+		{name: "blocked target reopens before queue", targetInitialStatus: "blocked"},
+		{name: "in_review target reopens before queue", targetInitialStatus: "in_review"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			sourceAgentID := getAgentID(t)
+			targetAgentID := createSecondAgent(t)
+
+			sourceIssueID := createIssueAssignedToAgent(t, "Source handoff issue", sourceAgentID)
+			targetIssueID := createIssueAssignedToAgent(t, "Target handoff issue", targetAgentID)
+
+			t.Cleanup(func() {
+				clearTasks(t, sourceIssueID)
+				clearTasks(t, targetIssueID)
+				resp := authRequest(t, "DELETE", "/api/issues/"+sourceIssueID, nil)
+				resp.Body.Close()
+				resp = authRequest(t, "DELETE", "/api/issues/"+targetIssueID, nil)
+				resp.Body.Close()
+			})
+
+			clearTasks(t, sourceIssueID)
+			clearTasks(t, targetIssueID)
+
+			if tc.targetInitialStatus != "todo" {
+				resp := authRequest(t, "PUT", "/api/issues/"+targetIssueID, map[string]any{
+					"status": tc.targetInitialStatus,
+				})
+				if resp.StatusCode != 200 {
+					body, _ := io.ReadAll(resp.Body)
+					resp.Body.Close()
+					t.Fatalf("prime target issue status: expected 200, got %d: %s", resp.StatusCode, body)
+				}
+				resp.Body.Close()
+				clearTasks(t, targetIssueID)
+			}
+
+			sourceResp := authRequest(t, "GET", "/api/issues/"+sourceIssueID, nil)
+			var sourceIssue map[string]any
+			readJSON(t, sourceResp, &sourceIssue)
+
+			targetResp := authRequest(t, "GET", "/api/issues/"+targetIssueID, nil)
+			var targetIssue map[string]any
+			readJSON(t, targetResp, &targetIssue)
+			targetIssueIdentifier := targetIssue["identifier"].(string)
+			targetIssueUUID := targetIssue["id"].(string)
+
+			handoffComment := fmt.Sprintf("handoff_back_to: [%s](mention://issue/%s)\nready for [%s](mention://issue/%s)", targetIssueIdentifier, targetIssueUUID, targetIssueIdentifier, targetIssueUUID)
+			postCommentAsAgent(t, sourceIssueID, handoffComment, sourceAgentID, nil)
+
+			resp := authRequest(t, "PUT", "/api/issues/"+sourceIssueID, map[string]any{
+				"status": "done",
+			})
+			if resp.StatusCode != 200 {
+				body, _ := io.ReadAll(resp.Body)
+				resp.Body.Close()
+				t.Fatalf("update issue status: expected 200, got %d: %s", resp.StatusCode, body)
+			}
+			resp.Body.Close()
+
+			if n := countPendingTasks(t, targetIssueID); n != 1 {
+				t.Fatalf("expected 1 pending task for handoff target, got %d", n)
+			}
+
+			refetchedTargetResp := authRequest(t, "GET", "/api/issues/"+targetIssueID, nil)
+			var refetchedTargetIssue map[string]any
+			readJSON(t, refetchedTargetResp, &refetchedTargetIssue)
+			if got := refetchedTargetIssue["status"]; got != "todo" {
+				t.Fatalf("target issue status = %#v, want todo", got)
+			}
+
+			var triggerCommentID string
+			var contextBytes []byte
+			err := testPool.QueryRow(context.Background(),
+				`SELECT trigger_comment_id::text, context
+				   FROM agent_task_queue
+				  WHERE issue_id = $1 AND agent_id = $2 AND status IN ('queued', 'dispatched')
+				  ORDER BY created_at DESC
+				  LIMIT 1`,
+				targetIssueID, targetAgentID,
+			).Scan(&triggerCommentID, &contextBytes)
+			if err != nil {
+				t.Fatalf("load handoff task: %v", err)
+			}
+
+			if triggerCommentID == "" {
+				t.Fatal("expected trigger_comment_id for handoff task")
+			}
+
+			var contextPayload map[string]any
+			if err := json.Unmarshal(contextBytes, &contextPayload); err != nil {
+				t.Fatalf("unmarshal handoff context: %v", err)
+			}
+			handoff, ok := contextPayload["handoff"].(map[string]any)
+			if !ok {
+				t.Fatalf("expected handoff context map, got %#v", contextPayload)
+			}
+			if got := handoff["sourceIssueId"]; got != sourceIssueID {
+				t.Fatalf("handoff sourceIssueId = %#v, want %q", got, sourceIssueID)
+			}
+			if got := handoff["sourceIssueStatus"]; got != "done" {
+				t.Fatalf("handoff sourceIssueStatus = %#v, want done", got)
+			}
+			if got := handoff["sourceCommentContent"]; got != handoffComment {
+				t.Fatalf("handoff sourceCommentContent = %#v, want %q", got, handoffComment)
+			}
+			if got := handoff["sourceIssueTitle"]; got != sourceIssue["title"] {
+				t.Fatalf("handoff sourceIssueTitle = %#v, want %#v", got, sourceIssue["title"])
+			}
+			if got := handoff["sourceCommentAuthorType"]; got != "agent" {
+				t.Fatalf("handoff sourceCommentAuthorType = %#v, want agent", got)
+			}
+		})
 	}
 }

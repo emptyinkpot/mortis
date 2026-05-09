@@ -32,10 +32,6 @@ import { useEditorState } from "@tiptap/react";
 import type { Editor } from "@tiptap/core";
 import { posToDOMRect } from "@tiptap/core";
 import { NodeSelection } from "@tiptap/pm/state";
-import { toast } from "sonner";
-import { useCreateIssue } from "@multica/core/issues/mutations";
-import { useT } from "../i18n";
-import { modKey } from "@multica/core/platform";
 import { Toggle } from "@multica/ui/components/ui/toggle";
 import { Separator } from "@multica/ui/components/ui/separator";
 import {
@@ -68,8 +64,6 @@ import {
   Heading1,
   Heading2,
   Heading3,
-  FilePlus,
-  Loader2,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -87,6 +81,10 @@ function shouldShowBubbleMenu(editor: Editor): boolean {
   if ($from.parent.type.name === "codeBlock") return false;
   return true;
 }
+
+const isMac =
+  typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
+const mod = isMac ? "\u2318" : "Ctrl";
 
 // ---------------------------------------------------------------------------
 // Mark Toggle Button
@@ -179,7 +177,6 @@ function LinkEditBar({
   editor: Editor;
   onClose: () => void;
 }) {
-  const { t } = useT("editor");
   const existingHref = editor.getAttributes("link").href as string | undefined;
   const [url, setUrl] = useState(existingHref ?? "");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -211,7 +208,7 @@ function LinkEditBar({
         value={url}
         onChange={(e) => setUrl(e.target.value)}
         placeholder="https://..."
-        aria-label={t(($) => $.bubble_menu.url_aria_label)}
+        aria-label="URL"
         className="h-7 flex-1 text-xs"
         onKeyDown={(e) => {
           if (e.key === "Enter") { e.preventDefault(); apply(); }
@@ -238,14 +235,13 @@ function LinkEditBar({
 // ---------------------------------------------------------------------------
 
 function HeadingDropdown({ editor, onOpenChange, activeLevel }: { editor: Editor; onOpenChange: (open: boolean) => void; activeLevel: number | undefined }) {
-  const { t } = useT("editor");
   const [open, setOpen] = useState(false);
-  const label = activeLevel ? `H${activeLevel}` : t(($) => $.bubble_menu.heading_dropdown.text);
+  const label = activeLevel ? `H${activeLevel}` : "Text";
   const items = [
-    { label: t(($) => $.bubble_menu.heading_dropdown.normal_text), icon: Type, active: !activeLevel, action: () => editor.chain().focus().setParagraph().run() },
-    { label: t(($) => $.bubble_menu.heading_dropdown.heading_1), icon: Heading1, active: activeLevel === 1, action: () => editor.chain().focus().toggleHeading({ level: 1 }).run() },
-    { label: t(($) => $.bubble_menu.heading_dropdown.heading_2), icon: Heading2, active: activeLevel === 2, action: () => editor.chain().focus().toggleHeading({ level: 2 }).run() },
-    { label: t(($) => $.bubble_menu.heading_dropdown.heading_3), icon: Heading3, active: activeLevel === 3, action: () => editor.chain().focus().toggleHeading({ level: 3 }).run() },
+    { label: "Normal Text", icon: Type, active: !activeLevel, action: () => editor.chain().focus().setParagraph().run() },
+    { label: "Heading 1", icon: Heading1, active: activeLevel === 1, action: () => editor.chain().focus().toggleHeading({ level: 1 }).run() },
+    { label: "Heading 2", icon: Heading2, active: activeLevel === 2, action: () => editor.chain().focus().toggleHeading({ level: 2 }).run() },
+    { label: "Heading 3", icon: Heading3, active: activeLevel === 3, action: () => editor.chain().focus().toggleHeading({ level: 3 }).run() },
   ];
 
   const handleOpenChange = useCallback((next: boolean) => {
@@ -295,7 +291,6 @@ function HeadingDropdown({ editor, onOpenChange, activeLevel }: { editor: Editor
 // ---------------------------------------------------------------------------
 
 function ListDropdown({ editor, onOpenChange, isBullet, isOrdered }: { editor: Editor; onOpenChange: (open: boolean) => void; isBullet: boolean; isOrdered: boolean }) {
-  const { t } = useT("editor");
   const [open, setOpen] = useState(false);
 
   const handleOpenChange = useCallback((next: boolean) => {
@@ -312,7 +307,7 @@ function ListDropdown({ editor, onOpenChange, isBullet, isOrdered }: { editor: E
           <List className="size-3.5" />
           <ChevronDown className="size-3" />
         </TooltipTrigger>
-        <TooltipContent side="top" sideOffset={8}>{t(($) => $.bubble_menu.list)}</TooltipContent>
+        <TooltipContent side="top" sideOffset={8}>List</TooltipContent>
       </Tooltip>
       <PopoverContent
         side="bottom"
@@ -330,7 +325,7 @@ function ListDropdown({ editor, onOpenChange, isBullet, isOrdered }: { editor: E
             handleOpenChange(false);
           }}
         >
-          <List className="size-3.5" /> {t(($) => $.bubble_menu.list_dropdown.bullet_list)}
+          <List className="size-3.5" /> Bullet List
           {isBullet && <Check className="ml-auto size-3.5" />}
         </button>
         <button
@@ -341,7 +336,7 @@ function ListDropdown({ editor, onOpenChange, isBullet, isOrdered }: { editor: E
             handleOpenChange(false);
           }}
         >
-          <ListOrdered className="size-3.5" /> {t(($) => $.bubble_menu.list_dropdown.ordered_list)}
+          <ListOrdered className="size-3.5" /> Ordered List
           {isOrdered && <Check className="ml-auto size-3.5" />}
         </button>
       </PopoverContent>
@@ -350,107 +345,10 @@ function ListDropdown({ editor, onOpenChange, isBullet, isOrdered }: { editor: E
 }
 
 // ---------------------------------------------------------------------------
-// Create Sub-Issue Button
-// ---------------------------------------------------------------------------
-
-/**
- * Turns the current selection into a sub-issue of `parentIssueId` and replaces
- * the selection with a mention link to the new issue. Title is the selected
- * text (trimmed, collapsed whitespace, capped). Only rendered when a parent
- * issue is in scope; otherwise there's no meaningful "sub-issue of" target.
- */
-function CreateSubIssueButton({
-  editor,
-  parentIssueId,
-}: {
-  editor: Editor;
-  parentIssueId: string;
-}) {
-  const { t } = useT("editor");
-  const createIssue = useCreateIssue();
-  const [pending, setPending] = useState(false);
-
-  const handleClick = useCallback(async () => {
-    if (pending) return;
-    const { from, to } = editor.state.selection;
-    if (from === to) return;
-
-    // Title from selection: collapse whitespace, cap length. The full selection
-    // still becomes the link text — only the issue title is capped.
-    const rawTitle = editor.state.doc.textBetween(from, to, " ", " ").trim();
-    const title = rawTitle.replace(/\s+/g, " ").slice(0, 200);
-    if (!title) return;
-
-    setPending(true);
-    try {
-      const newIssue = await createIssue.mutateAsync({
-        title,
-        parent_issue_id: parentIssueId,
-      });
-      editor
-        .chain()
-        .focus()
-        .insertContentAt(
-          { from, to },
-          [
-            {
-              type: "mention",
-              attrs: {
-                id: newIssue.id,
-                label: newIssue.identifier,
-                type: "issue",
-              },
-            },
-            { type: "text", text: " " },
-          ],
-        )
-        .run();
-      toast.success(t(($) => $.bubble_menu.sub_issue.created, { identifier: newIssue.identifier }));
-    } catch {
-      toast.error(t(($) => $.bubble_menu.sub_issue.create_failed));
-    } finally {
-      setPending(false);
-    }
-  }, [editor, parentIssueId, createIssue, pending, t]);
-
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Toggle
-            size="sm"
-            pressed={false}
-            disabled={pending}
-            onPressedChange={handleClick}
-            onMouseDown={(e) => e.preventDefault()}
-          />
-        }
-      >
-        {pending ? (
-          <Loader2 className="size-3.5 animate-spin" />
-        ) : (
-          <FilePlus className="size-3.5" />
-        )}
-      </TooltipTrigger>
-      <TooltipContent side="top" sideOffset={8}>
-        {t(($) => $.bubble_menu.sub_issue.tooltip)}
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Main Bubble Menu — @floating-ui/dom + portal to body
 // ---------------------------------------------------------------------------
 
-function EditorBubbleMenu({
-  editor,
-  currentIssueId,
-}: {
-  editor: Editor;
-  currentIssueId?: string;
-}) {
-  const { t } = useT("editor");
+function EditorBubbleMenu({ editor }: { editor: Editor }) {
   const [visible, setVisible] = useState(false);
   const [mode, setMode] = useState<"toolbar" | "link-edit">("toolbar");
   const floatingRef = useRef<HTMLDivElement>(null);
@@ -580,10 +478,10 @@ function EditorBubbleMenu({
       ) : (
         <TooltipProvider delay={300}>
           <div className="bubble-menu">
-            <MarkButton editor={editor} mark="bold" icon={Bold} label={t(($) => $.bubble_menu.bold)} shortcut={`${modKey}+B`} isActive={fmt.bold} />
-            <MarkButton editor={editor} mark="italic" icon={Italic} label={t(($) => $.bubble_menu.italic)} shortcut={`${modKey}+I`} isActive={fmt.italic} />
-            <MarkButton editor={editor} mark="strike" icon={Strikethrough} label={t(($) => $.bubble_menu.strikethrough)} shortcut={`${modKey}+Shift+S`} isActive={fmt.strike} />
-            <MarkButton editor={editor} mark="code" icon={Code} label={t(($) => $.bubble_menu.code)} shortcut={`${modKey}+E`} isActive={fmt.code} />
+            <MarkButton editor={editor} mark="bold" icon={Bold} label="Bold" shortcut={`${mod}+B`} isActive={fmt.bold} />
+            <MarkButton editor={editor} mark="italic" icon={Italic} label="Italic" shortcut={`${mod}+I`} isActive={fmt.italic} />
+            <MarkButton editor={editor} mark="strike" icon={Strikethrough} label="Strikethrough" shortcut={`${mod}+Shift+S`} isActive={fmt.strike} />
+            <MarkButton editor={editor} mark="code" icon={Code} label="Code" shortcut={`${mod}+E`} isActive={fmt.code} />
             <Separator orientation="vertical" className="mx-0.5 h-5" />
             <Tooltip>
               <TooltipTrigger render={
@@ -591,7 +489,7 @@ function EditorBubbleMenu({
               }>
                 <Link2 className="size-3.5" />
               </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={8}>{t(($) => $.bubble_menu.link)}</TooltipContent>
+              <TooltipContent side="top" sideOffset={8}>Link</TooltipContent>
             </Tooltip>
             <Separator orientation="vertical" className="mx-0.5 h-5" />
             <HeadingDropdown editor={editor} onOpenChange={handleMenuOpenChange} activeLevel={fmt.heading1 ? 1 : fmt.heading2 ? 2 : fmt.heading3 ? 3 : undefined} />
@@ -602,14 +500,8 @@ function EditorBubbleMenu({
               }>
                 <Quote className="size-3.5" />
               </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={8}>{t(($) => $.bubble_menu.quote)}</TooltipContent>
+              <TooltipContent side="top" sideOffset={8}>Quote</TooltipContent>
             </Tooltip>
-            {currentIssueId && (
-              <>
-                <Separator orientation="vertical" className="mx-0.5 h-5" />
-                <CreateSubIssueButton editor={editor} parentIssueId={currentIssueId} />
-              </>
-            )}
           </div>
         </TooltipProvider>
       )}

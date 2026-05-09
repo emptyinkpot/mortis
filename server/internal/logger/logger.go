@@ -8,8 +8,6 @@ import (
 
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/lmittmann/tint"
-
-	"github.com/multica-ai/multica/server/internal/middleware"
 )
 
 // isTerminal reports whether the given file descriptor is connected to a
@@ -49,27 +47,15 @@ func NewLogger(component string) *slog.Logger {
 	return slog.New(handler).With("component", component)
 }
 
-// RequestAttrs extracts request_id, user_id, and X-Client-* metadata from
-// an HTTP request for use in handler-level structured logging. Mirrors the
-// global request logger so handler logs end up with the same observability
-// dimensions as the access log.
+// RequestAttrs extracts request_id and user_id from an HTTP request
+// for use in handler-level structured logging.
 func RequestAttrs(r *http.Request) []any {
-	attrs := make([]any, 0, 10)
+	attrs := make([]any, 0, 4)
 	if rid := chimw.GetReqID(r.Context()); rid != "" {
 		attrs = append(attrs, "request_id", rid)
 	}
 	if uid := r.Header.Get("X-User-ID"); uid != "" {
 		attrs = append(attrs, "user_id", uid)
-	}
-	platform, version, os := middleware.ClientMetadataFromContext(r.Context())
-	if platform != "" {
-		attrs = append(attrs, "client_platform", platform)
-	}
-	if version != "" {
-		attrs = append(attrs, "client_version", version)
-	}
-	if os != "" {
-		attrs = append(attrs, "client_os", os)
 	}
 	return attrs
 }

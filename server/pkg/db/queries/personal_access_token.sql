@@ -15,11 +15,10 @@ WHERE user_id = $1
   AND revoked = FALSE
 ORDER BY created_at DESC;
 
--- name: RevokePersonalAccessToken :one
+-- name: RevokePersonalAccessToken :exec
 UPDATE personal_access_token
 SET revoked = TRUE
-WHERE id = $1 AND user_id = $2
-RETURNING token_hash;
+WHERE id = $1 AND user_id = $2;
 
 -- name: UpdatePersonalAccessTokenLastUsed :exec
 UPDATE personal_access_token

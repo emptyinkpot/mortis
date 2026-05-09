@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Multica installer — installs the CLI and optionally provisions a self-host server.
+# Multica installer - installs the CLI and optionally provisions a self-host server.
 #
 # Install / upgrade CLI only:
 #   curl -fsSL https://raw.githubusercontent.com/multica-ai/multica/main/scripts/install.sh | bash
@@ -8,6 +8,14 @@
 #   curl -fsSL https://raw.githubusercontent.com/multica-ai/multica/main/scripts/install.sh | bash -s -- --with-server
 #
 # After installation, run `multica setup` to configure your environment.
+#
+# Scope note:
+# - This installer is a generic compatibility entry for upstream-style `multica`
+#   CLI and self-host setup.
+# - It is not the source of truth for the current Mortis private production
+#   deployment.
+# - Current Mortis runtime facts and operator shortcuts live in `README.md`,
+#   `project.json`, and `MORTIS_PRIVATE_DEPLOYMENT_NOTES.md`.
 #
 set -euo pipefail
 
@@ -90,8 +98,7 @@ install_cli_binary() {
     fail "Could not determine latest release. Check your network connection."
   fi
 
-  local version="${latest#v}"
-  local url="https://github.com/multica-ai/multica/releases/download/${latest}/multica-cli-${version}-${OS}-${ARCH}.tar.gz"
+  local url="https://github.com/multica-ai/multica/releases/download/${latest}/multica_${OS}_${ARCH}.tar.gz"
   local tmp_dir
   tmp_dir=$(mktemp -d)
 
@@ -138,55 +145,6 @@ add_to_path() {
 get_latest_version() {
   # grep exits 1 when no match; use `|| true` to avoid triggering pipefail
   curl -sI "$REPO_WEB_URL/releases/latest" 2>/dev/null | grep -i '^location:' | sed 's/.*tag\///' | tr -d '\r\n' || true
-}
-
-get_selfhost_ref() {
-  if [ -n "${MULTICA_SELFHOST_REF:-}" ]; then
-    printf '%s' "$MULTICA_SELFHOST_REF"
-    return
-  fi
-
-  local latest
-  latest=$(get_latest_version)
-  if [ -n "$latest" ]; then
-    printf '%s' "$latest"
-    return
-  fi
-
-  printf '%s' "main"
-}
-
-checkout_server_ref() {
-  local ref="$1"
-
-  if [ "$ref" = "main" ]; then
-    git fetch origin main --depth 1 2>/dev/null || true
-    git checkout --force main 2>/dev/null || true
-    git reset --hard origin/main 2>/dev/null || true
-    return
-  fi
-
-  git fetch origin --tags --force 2>/dev/null || true
-  if git rev-parse --verify --quiet "refs/tags/$ref" >/dev/null; then
-    git checkout --force "$ref" 2>/dev/null || git checkout --force "tags/$ref" 2>/dev/null || true
-    return
-  fi
-
-  git fetch origin "$ref" --depth 1 2>/dev/null || true
-  git checkout --force "$ref" 2>/dev/null || true
-}
-
-pull_official_selfhost_images() {
-  if docker compose -f docker-compose.selfhost.yml pull; then
-    return
-  fi
-
-  echo ""
-  warn "Official images for the selected self-host channel are not published yet."
-  echo "This can happen before the first GHCR release is available."
-  echo "From $INSTALL_DIR, build from source instead:"
-  echo "  docker compose -f docker-compose.selfhost.yml -f docker-compose.selfhost.build.yml up -d --build"
-  exit 1
 }
 
 upgrade_cli_brew() {
@@ -270,13 +228,12 @@ After installing Docker, re-run this script with --with-server."
 # ---------------------------------------------------------------------------
 setup_server() {
   info "Setting up Multica server..."
-  local server_ref
-  server_ref=$(get_selfhost_ref)
-  info "Using self-host assets from ${server_ref}..."
 
   if [ -d "$INSTALL_DIR/.git" ]; then
     info "Updating existing installation at $INSTALL_DIR..."
     cd "$INSTALL_DIR"
+    git fetch origin main --depth 1 2>/dev/null || true
+    git reset --hard origin/main 2>/dev/null || true
   else
     info "Cloning Multica repository..."
     if ! command_exists git; then
@@ -292,9 +249,7 @@ setup_server() {
     cd "$INSTALL_DIR"
   fi
 
-  checkout_server_ref "$server_ref"
-
-  ok "Repository ready at $INSTALL_DIR ($server_ref)"
+  ok "Repository ready at $INSTALL_DIR"
 
   # Generate .env if needed
   if [ ! -f .env ]; then
@@ -313,10 +268,8 @@ setup_server() {
   fi
 
   # Start Docker Compose
-  info "Pulling official Multica images..."
-  pull_official_selfhost_images
   info "Starting Multica services (this may take a few minutes on first run)..."
-  docker compose -f docker-compose.selfhost.yml up -d
+  docker compose -f docker-compose.selfhost.yml up -d --build
 
   # Wait for health check
   info "Waiting for backend to be ready..."
@@ -393,7 +346,7 @@ run_with_server() {
   printf "     ${CYAN}multica setup self-host${RESET}   # Configure + authenticate + start daemon\n"
   printf "\n"
   printf "  ${BOLD}Login:${RESET} configure ${CYAN}RESEND_API_KEY${RESET} in .env for email codes,\n"
-  printf "  or read the generated code from backend logs when Resend is unset.\n"
+  printf "  or set ${CYAN}APP_ENV=development${RESET} in .env to enable the dev master code ${BOLD}888888${RESET}.\n"
   printf "\n"
   printf "  ${BOLD}To stop all services:${RESET}\n"
   printf "     curl -fsSL https://raw.githubusercontent.com/multica-ai/multica/main/scripts/install.sh | bash -s -- --stop\n"

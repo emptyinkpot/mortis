@@ -97,43 +97,21 @@ func (q *Queries) CreateActivity(ctx context.Context, arg CreateActivityParams) 
 	return i, err
 }
 
-const getActivity = `-- name: GetActivity :one
-SELECT id, workspace_id, issue_id, actor_type, actor_id, action, details, created_at FROM activity_log
-WHERE id = $1
-`
-
-func (q *Queries) GetActivity(ctx context.Context, id pgtype.UUID) (ActivityLog, error) {
-	row := q.db.QueryRow(ctx, getActivity, id)
-	var i ActivityLog
-	err := row.Scan(
-		&i.ID,
-		&i.WorkspaceID,
-		&i.IssueID,
-		&i.ActorType,
-		&i.ActorID,
-		&i.Action,
-		&i.Details,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
-const listActivitiesForIssue = `-- name: ListActivitiesForIssue :many
+const listActivities = `-- name: ListActivities :many
 SELECT id, workspace_id, issue_id, actor_type, actor_id, action, details, created_at FROM activity_log
 WHERE issue_id = $1
-ORDER BY created_at ASC, id ASC
-LIMIT $2
+ORDER BY created_at ASC
+LIMIT $2 OFFSET $3
 `
 
-type ListActivitiesForIssueParams struct {
+type ListActivitiesParams struct {
 	IssueID pgtype.UUID `json:"issue_id"`
 	Limit   int32       `json:"limit"`
+	Offset  int32       `json:"offset"`
 }
 
-// All activities for an issue in chronological order, capped at $2 (DB safety
-// net to bound the response).
-func (q *Queries) ListActivitiesForIssue(ctx context.Context, arg ListActivitiesForIssueParams) ([]ActivityLog, error) {
-	rows, err := q.db.Query(ctx, listActivitiesForIssue, arg.IssueID, arg.Limit)
+func (q *Queries) ListActivities(ctx context.Context, arg ListActivitiesParams) ([]ActivityLog, error) {
+	rows, err := q.db.Query(ctx, listActivities, arg.IssueID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}

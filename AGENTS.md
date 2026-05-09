@@ -45,3 +45,9 @@ make check            # Full verification pipeline
 ```
 
 See CLAUDE.md for the complete command reference.
+
+### Agent coordination
+
+- AI agents must self-register concurrent work in `.codex/workstreams.jsonl`
+- Use `./scripts/workstream.ps1` directly; do not ask the user to run ledger commands
+- Read `CLAUDE.md#concurrent-workstream-protocol` before non-trivial concurrent edits

@@ -12,12 +12,10 @@ import {
   TooltipTrigger,
   TooltipContent,
 } from "@multica/ui/components/ui/tooltip";
-import { useT } from "../../i18n";
 
 const logger = createLogger("chat.ui");
 
 export function ChatFab() {
-  const { t } = useT("chat");
   const wsId = useWorkspaceId();
   const isOpen = useChatStore((s) => s.isOpen);
   const toggle = useChatStore((s) => s.toggle);
@@ -36,10 +34,10 @@ export function ChatFab() {
 
   // Tooltip text communicates the state that isn't carried by the icon/badge.
   const tooltip = isRunning
-    ? t(($) => $.fab.running)
+    ? "Mortis is working..."
     : unreadSessionCount > 0
-      ? t(($) => $.fab.unread, { count: unreadSessionCount })
-      : t(($) => $.fab.default);
+      ? `${unreadSessionCount} unread ${unreadSessionCount === 1 ? "chat" : "chats"}`
+      : "Ask Mortis";
 
   return (
     <Tooltip>

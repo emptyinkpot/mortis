@@ -6,6 +6,13 @@
 # Self-host: starts a local Multica server + installs CLI + configures
 #   $env:MULTICA_MODE="local"; irm https://raw.githubusercontent.com/multica-ai/multica/main/scripts/install.ps1 | iex
 #
+# Scope note:
+# - This installer is a generic compatibility entry for upstream-style `multica`
+#   CLI and self-host setup.
+# - It is not the source of truth for the current Mortis private production
+#   deployment.
+# - Current Mortis runtime facts and operator shortcuts live in `README.md`,
+#   `project.json`, and `MORTIS_PRIVATE_DEPLOYMENT_NOTES.md`.
 
 $ErrorActionPreference = "Stop"
 
@@ -39,142 +46,6 @@ function Get-LatestVersion {
     }
 }
 
-function Get-SelfHostRef {
-    if ($env:MULTICA_SELFHOST_REF) {
-        return $env:MULTICA_SELFHOST_REF
-    }
-
-    $latest = Get-LatestVersion
-    if ($latest) {
-        return $latest
-    }
-
-    return "main"
-}
-
-function Checkout-ServerRef {
-    param([string]$Ref)
-
-    if ($Ref -eq "main") {
-        git fetch origin main --depth 1 2>$null
-        git checkout --force main 2>$null
-        git reset --hard origin/main 2>$null
-        return
-    }
-
-    git fetch origin --tags --force 2>$null
-    $tagRef = "refs/tags/$Ref"
-    git show-ref --verify --quiet $tagRef 2>$null
-    if ($LASTEXITCODE -eq 0) {
-        git checkout --force $Ref 2>$null
-        return
-    }
-
-    git fetch origin $Ref --depth 1 2>$null
-    git checkout --force $Ref 2>$null
-}
-
-function Pull-OfficialSelfHostImages {
-    docker compose -f docker-compose.selfhost.yml pull
-    if ($LASTEXITCODE -eq 0) {
-        return
-    }
-
-    Write-Host ""
-    Write-Warn "Official images for the selected self-host channel are not published yet."
-    Write-Host "This can happen before the first GHCR release is available."
-    Write-Host "From $InstallDir, build from source instead:"
-    Write-Host "  docker compose -f docker-compose.selfhost.yml -f docker-compose.selfhost.build.yml up -d --build"
-    exit 1
-}
-
-function Convert-ToCliArch {
-    param([object]$Value)
-
-    if ($null -eq $Value) {
-        return $null
-    }
-
-    $normalized = "$Value".Trim().ToUpperInvariant()
-    switch ($normalized) {
-        "9"      { return "amd64" }
-        "AMD64"  { return "amd64" }
-        "X64"    { return "amd64" }
-        "X86_64" { return "amd64" }
-        "12"     { return "arm64" }
-        "ARM64"  { return "arm64" }
-        "AARCH64" { return "arm64" }
-        default  { return $null }
-    }
-}
-
-function Get-WindowsCliArch {
-    $signals = @()
-    $nativeArchSignalFound = $false
-
-    # Prefer the native processor architecture over the current PowerShell
-    # process architecture. This keeps Windows on ARM from being misdetected
-    # when PowerShell is running through x64/x86 emulation.
-    try {
-        if (Get-Command Get-CimInstance -ErrorAction SilentlyContinue) {
-            $processorArch = Get-CimInstance -ClassName Win32_Processor -ErrorAction Stop |
-                Select-Object -First 1 -ExpandProperty Architecture
-            $signals += [pscustomobject]@{ Source = "Win32_Processor.Architecture"; Value = $processorArch }
-            $nativeArchSignalFound = $true
-        }
-    } catch {}
-
-    try {
-        if (-not $nativeArchSignalFound -and (Get-Command Get-WmiObject -ErrorAction SilentlyContinue)) {
-            $processorArch = Get-WmiObject -Class Win32_Processor -ErrorAction Stop |
-                Select-Object -First 1 -ExpandProperty Architecture
-            $signals += [pscustomobject]@{ Source = "Win32_Processor.Architecture"; Value = $processorArch }
-            $nativeArchSignalFound = $true
-        }
-    } catch {}
-
-    try {
-        $signals += [pscustomobject]@{
-            Source = "RuntimeInformation.OSArchitecture"
-            Value = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture
-        }
-    } catch {}
-
-    $signals += [pscustomobject]@{ Source = "PROCESSOR_ARCHITEW6432"; Value = $env:PROCESSOR_ARCHITEW6432 }
-    $signals += [pscustomobject]@{ Source = "PROCESSOR_ARCHITECTURE"; Value = $env:PROCESSOR_ARCHITECTURE }
-
-    foreach ($signal in $signals) {
-        $arch = Convert-ToCliArch $signal.Value
-        if ($arch) {
-            return $arch
-        }
-    }
-
-    $details = ($signals |
-        Where-Object { $null -ne $_.Value -and "$($_.Value)".Trim() -ne "" } |
-        ForEach-Object { "$($_.Source)=$($_.Value)" }) -join ", "
-    if (-not $details) {
-        $details = "no architecture signals available"
-    }
-
-    Write-Fail "Unsupported Windows architecture ($details). Only x64 and ARM64 are supported."
-}
-
-function Get-InstalledCliVersion {
-    try {
-        $firstLine = multica version 2>$null | Select-Object -First 1
-        if ("$firstLine" -match '\b(v?\d+(?:\.\d+)+)\b') {
-            $version = $Matches[1]
-            if ($version -notlike 'v*') {
-                $version = "v$version"
-            }
-            return $version
-        }
-    } catch {}
-
-    return $null
-}
-
 # ---------------------------------------------------------------------------
 # CLI Installation
 # ---------------------------------------------------------------------------
@@ -184,16 +55,14 @@ function Install-CliBinary {
     if (-not [Environment]::Is64BitOperatingSystem) {
         Write-Fail "Multica requires a 64-bit Windows installation."
     }
-
-    $arch = Get-WindowsCliArch
+    $arch = "amd64"
 
     $latest = Get-LatestVersion
     if (-not $latest) {
         Write-Fail "Could not determine latest release. Check your network connection."
     }
 
-    $version = $latest.TrimStart('v')
-    $url = "https://github.com/multica-ai/multica/releases/download/$latest/multica-cli-$version-windows-$arch.zip"
+    $url = "https://github.com/multica-ai/multica/releases/download/$latest/multica_windows_$arch.zip"
     $tmpDir = Join-Path ([System.IO.Path]::GetTempPath()) "multica-install"
 
     if (Test-Path $tmpDir) { Remove-Item $tmpDir -Recurse -Force }
@@ -211,21 +80,9 @@ function Install-CliBinary {
     $checksumUrl = "https://github.com/multica-ai/multica/releases/download/$latest/checksums.txt"
     try {
         $checksums = Invoke-WebRequest -Uri $checksumUrl -UseBasicParsing -ErrorAction Stop
-        $checksumContent = if ($checksums.Content -is [byte[]]) {
-            [System.Text.Encoding]::UTF8.GetString($checksums.Content)
-        } else {
-            [string]$checksums.Content
-        }
         $zipFile = Join-Path $tmpDir "multica.zip"
         $actualHash = (Get-FileHash -Path $zipFile -Algorithm SHA256).Hash.ToLower()
-        $releaseAsset = "multica-cli-$version-windows-$arch.zip"
-        $legacyAsset = "multica_windows_$arch.zip"
-        $expectedLine = ($checksumContent -split "`r?`n") |
-            Where-Object {
-                $_ -match [regex]::Escape($releaseAsset) -or
-                $_ -match [regex]::Escape($legacyAsset)
-            } |
-            Select-Object -First 1
+        $expectedLine = ($checksums.Content -split "`n") | Where-Object { $_ -match "multica_windows_$arch\.zip" } | Select-Object -First 1
         if ($expectedLine) {
             $expectedHash = ($expectedLine -split "\s+")[0].ToLower()
             if ($actualHash -ne $expectedHash) {
@@ -234,7 +91,7 @@ function Install-CliBinary {
             }
             Write-Ok "Checksum verified"
         } else {
-            Write-Warn "Could not find checksum entry for $releaseAsset — skipping verification."
+            Write-Warn "Could not find checksum entry for windows_$arch — skipping verification."
         }
     } catch {
         Write-Warn "Could not download checksums.txt — skipping verification."
@@ -280,18 +137,18 @@ function Add-ToUserPath {
 
 function Install-Cli {
     if (Test-CommandExists "multica") {
-        $currentVer = Get-InstalledCliVersion
+        $currentVer = (multica version 2>$null) -replace '.*?(v[\d.]+).*','$1'
         $latestVer = Get-LatestVersion
 
-        $currentCmp = if ($currentVer) { $currentVer -replace '^v','' } else { $null }
+        $currentCmp = $currentVer -replace '^v',''
         $latestCmp = if ($latestVer) { $latestVer -replace '^v','' } else { $null }
 
-        $isUpToDate = $currentCmp -and -not $latestCmp
+        $isUpToDate = -not $latestCmp
         if (-not $isUpToDate) {
             try {
-                $isUpToDate = $currentCmp -and $latestCmp -and ([System.Version]$currentCmp -ge [System.Version]$latestCmp)
+                $isUpToDate = [System.Version]$currentCmp -ge [System.Version]$latestCmp
             } catch {
-                $isUpToDate = $currentCmp -and $latestCmp -and ($currentCmp -eq $latestCmp)
+                $isUpToDate = $currentCmp -eq $latestCmp
             }
         }
 
@@ -303,7 +160,7 @@ function Install-Cli {
         Write-Info "Multica CLI $currentVer installed, latest is $latestVer - upgrading..."
         Install-CliBinary
 
-        $newVer = Get-InstalledCliVersion
+        $newVer = (multica version 2>$null) -replace '.*?(v[\d.]+).*','$1'
         Write-Ok "Multica CLI upgraded ($currentVer -> $newVer)"
         return
     }
@@ -344,12 +201,14 @@ After installing Docker, re-run this script with `$env:MULTICA_MODE="local"`.
 # ---------------------------------------------------------------------------
 function Install-Server {
     Write-Info "Setting up Multica server..."
-    $serverRef = Get-SelfHostRef
-    Write-Info "Using self-host assets from $serverRef..."
 
     if (Test-Path (Join-Path $InstallDir ".git")) {
         Write-Info "Updating existing installation at $InstallDir..."
         Write-Warn "Any local changes in $InstallDir will be overwritten."
+        Push-Location $InstallDir
+        git fetch origin main --depth 1 2>$null
+        git reset --hard origin/main 2>$null
+        Pop-Location
     } else {
         Write-Info "Cloning Multica repository..."
         if (-not (Test-CommandExists "git")) {
@@ -366,9 +225,9 @@ function Install-Server {
         git clone --depth 1 $RepoUrl $InstallDir
     }
 
+    Write-Ok "Repository ready at $InstallDir"
+
     Push-Location $InstallDir
-    Checkout-ServerRef $serverRef
-    Write-Ok "Repository ready at $InstallDir ($serverRef)"
 
     if (-not (Test-Path ".env")) {
         Write-Info "Creating .env with random JWT_SECRET..."
@@ -380,10 +239,8 @@ function Install-Server {
         Write-Ok "Using existing .env"
     }
 
-    Write-Info "Pulling official Multica images..."
-    Pull-OfficialSelfHostImages
     Write-Info "Starting Multica services (this may take a few minutes on first run)..."
-    docker compose -f docker-compose.selfhost.yml up -d
+    docker compose -f docker-compose.selfhost.yml up -d --build
 
     Write-Info "Waiting for backend to be ready..."
     $ready = $false
@@ -460,7 +317,7 @@ function Start-LocalInstall {
     Write-Host "     multica setup self-host  " -NoNewline; Write-Host "# Configure + authenticate + start daemon" -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "  Login: configure RESEND_API_KEY in .env for email codes,"
-    Write-Host "  or read the generated code from backend logs when Resend is unset."
+    Write-Host "  or set APP_ENV=development in .env to enable the dev master code 888888."
     Write-Host ""
     Write-Host "  To stop all services:"
     Write-Host '     $env:MULTICA_MODE="stop"; irm https://raw.githubusercontent.com/multica-ai/multica/main/scripts/install.ps1 | iex'

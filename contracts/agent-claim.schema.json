@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mortis.local/contracts/agent-claim.schema.json",
+  "title": "Mortis Agent Claim",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "task_id",
+    "title",
+    "agent_id",
+    "branch",
+    "worktree",
+    "claimed_paths",
+    "status",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "task_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "agent_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "role": {
+      "type": "string",
+      "enum": ["architect", "implementer", "reviewer", "researcher", "release-manager"]
+    },
+    "branch": {
+      "type": "string",
+      "pattern": "^(agent|fix|docs|refactor)/[a-z0-9][a-z0-9-]*/[a-z0-9][a-z0-9-]*$"
+    },
+    "worktree": {
+      "type": "string",
+      "minLength": 1
+    },
+    "claimed_paths": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "status": {
+      "type": "string",
+      "enum": ["active", "blocked", "review", "handoff", "completed", "abandoned"]
+    },
+    "blocked_reason": {
+      "type": "string"
+    },
+    "handoff_to": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

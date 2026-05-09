@@ -8,6 +8,8 @@ import { paths } from "@multica/core/paths";
 import { workspaceListOptions } from "@multica/core/workspace/queries";
 import { NewWorkspacePage } from "@multica/views/workspace/new-workspace-page";
 
+const autoLoginSlug = process.env.NEXT_PUBLIC_AUTO_LOGIN_WORKSPACE_SLUG || "";
+
 export default function Page() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
@@ -21,7 +23,14 @@ export default function Page() {
     if (!isLoading && !user) router.replace(paths.login());
   }, [isLoading, user, router]);
 
+  useEffect(() => {
+    if (!isLoading && user && autoLoginSlug) {
+      router.replace(paths.workspace(autoLoginSlug).issues());
+    }
+  }, [isLoading, user, router, autoLoginSlug]);
+
   if (isLoading || !user) return null;
+  if (autoLoginSlug) return null;
 
   // Back goes to the root path — the workspace layout redirects from
   // there to the user's default workspace. Only show Back when there's

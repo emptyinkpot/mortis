@@ -5,7 +5,6 @@ import type { Comment, Reaction } from "./comment";
 import type { TimelineEntry } from "./activity";
 import type { Workspace, MemberWithUser, Invitation } from "./workspace";
 import type { Project } from "./project";
-import type { Label } from "./label";
 
 // WebSocket event types (matching Go server protocol/events.go)
 export type WSEventType =
@@ -15,13 +14,10 @@ export type WSEventType =
   | "comment:created"
   | "comment:updated"
   | "comment:deleted"
-  | "comment:resolved"
-  | "comment:unresolved"
   | "agent:status"
   | "agent:created"
   | "agent:archived"
   | "agent:restored"
-  | "task:queued"
   | "task:dispatch"
   | "task:progress"
   | "task:completed"
@@ -53,17 +49,11 @@ export type WSEventType =
   | "chat:message"
   | "chat:done"
   | "chat:session_read"
-  | "chat:session_deleted"
   | "project:created"
   | "project:updated"
   | "project:deleted"
-  | "label:created"
-  | "label:updated"
-  | "label:deleted"
-  | "issue_labels:changed"
   | "pin:created"
   | "pin:deleted"
-  | "pin:reordered"
   | "invitation:created"
   | "invitation:accepted"
   | "invitation:declined"
@@ -85,11 +75,6 @@ export interface IssueUpdatedPayload {
 
 export interface IssueDeletedPayload {
   issue_id: string;
-}
-
-export interface IssueLabelsChangedPayload {
-  issue_id: string;
-  labels: Label[];
 }
 
 export interface AgentStatusPayload {
@@ -145,14 +130,6 @@ export interface CommentDeletedPayload {
   issue_id: string;
 }
 
-export interface CommentResolvedPayload {
-  comment: Comment;
-}
-
-export interface CommentUnresolvedPayload {
-  comment: Comment;
-}
-
 export interface WorkspaceUpdatedPayload {
   workspace: Workspace;
 }
@@ -205,22 +182,6 @@ export interface TaskMessagePayload {
   content?: string;
   input?: Record<string, unknown>;
   output?: string;
-}
-
-export interface TaskQueuedPayload {
-  task_id: string;
-  agent_id: string;
-  issue_id: string;
-  chat_session_id?: string;
-  status: string;
-}
-
-export interface TaskDispatchPayload {
-  task_id: string;
-  agent_id: string;
-  issue_id: string;
-  runtime_id: string;
-  chat_session_id?: string;
 }
 
 export interface TaskCompletedPayload {
@@ -288,10 +249,6 @@ export interface ChatDonePayload {
 }
 
 export interface ChatSessionReadPayload {
-  chat_session_id: string;
-}
-
-export interface ChatSessionDeletedPayload {
   chat_session_id: string;
 }
 

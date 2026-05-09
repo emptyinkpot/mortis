@@ -2,12 +2,12 @@ import type { Metadata } from "next";
 import { ChangelogPageClient } from "@/features/landing/components/changelog-page-client";
 
 export const metadata: Metadata = {
-  title: "Changelog",
+  title: "更新日志",
   description:
-    "See what's new in Multica — latest features, improvements, and fixes.",
+    "查看 Mortis 的最新功能、改进与修复。",
   openGraph: {
-    title: "Changelog | Multica",
-    description: "Latest updates and releases from Multica.",
+    title: "更新日志 | Mortis",
+    description: "Mortis 的最新更新与发布记录。",
     url: "/changelog",
   },
   alternates: {

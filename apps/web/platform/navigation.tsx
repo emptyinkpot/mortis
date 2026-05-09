@@ -22,8 +22,6 @@ function NavigationProviderInner({
     back: router.back,
     pathname,
     searchParams: new URLSearchParams(searchParams.toString()),
-    getShareableUrl: (path: string) =>
-      typeof window === "undefined" ? path : window.location.origin + path,
   };
 
   return <NavigationProvider value={adapter}>{children}</NavigationProvider>;

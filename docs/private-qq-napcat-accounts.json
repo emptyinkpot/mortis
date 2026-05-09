@@ -1,0 +1,439 @@
+{
+  "schema_version": 3,
+  "last_verified_at": "2026-05-06T13:45:00+08:00",
+  "source_of_truth": "Observed production state on 2026-05-06 after all four NapCat accounts logged in and backend health gate passed.",
+  "production_host": "ubuntu@124.220.233.126",
+  "production_root": "/srv/multica",
+  "compose_file": "/srv/multica/docker-compose.selfhost.yml",
+  "backend": {
+    "health_url_on_host": "http://127.0.0.1:8088/health",
+    "latest_verified_commit": "a4b37a2",
+    "container": "multica-backend-1",
+    "living_agents_enabled": true,
+    "living_group_id": "474958794",
+    "living_group_name": "编程内参交流群",
+    "inbound_ack_enabled": false,
+    "llm_enabled": true,
+    "llm_wire_api": "chat_completions"
+  },
+  "qq_accounts": [
+    {
+      "role": "ceo",
+      "qq_uin": "3974470627",
+      "nickname": "邪恶男娘爱好者",
+      "actual_container": "napcat-qq1",
+      "expected_container_for_current_backend": "napcat-qq1",
+      "docker_ports": {
+        "onebot_http_container_port": 3000,
+        "onebot_http_host": "127.0.0.1",
+        "onebot_http_host_port": 3600,
+        "webui_container_port": 6099,
+        "webui_host": "127.0.0.1",
+        "webui_host_port": 16099,
+        "extra_mapped_host_port": 3601
+      },
+      "urls": {
+        "backend_onebot_url": "http://napcat-qq1:3000",
+        "host_onebot_url": "http://127.0.0.1:3600",
+        "host_webui_url": "http://127.0.0.1:16099/webui",
+        "local_tunnel_webui_url": null
+      },
+      "webui": {
+        "token": "a6f15794",
+        "login_rate": 10,
+        "auto_login_account": ""
+      },
+      "onebot11": {
+        "active_config_path": "/app/napcat/config/onebot11_3974470627.json",
+        "http_server": {
+          "enable": true,
+          "name": "mortis-http",
+          "host": "0.0.0.0",
+          "port": 3000,
+          "enable_cors": true,
+          "enable_websocket": false,
+          "message_post_format": "array",
+          "token": "",
+          "debug": false
+        },
+        "http_client": {
+          "enable": true,
+          "name": "mortis-inbound",
+          "url": "http://multica-backend-1:8080/api/qq/onebot?secret=mortis-qq-inbound-20260505",
+          "message_post_format": "array",
+          "report_self_message": false,
+          "debug": false
+        },
+        "legacy_or_extra_configs": [
+          {
+            "path": "/app/napcat/config/onebot11_2264869713.json",
+            "note": "legacy notify-http config present in qq1 container; not the active ceo account config"
+          }
+        ]
+      },
+      "backend_env": {
+        "MORTIS_AI_CEO_QQ": "3974470627",
+        "MORTIS_AI_CEO_ONEBOT_URL": "http://napcat-qq1:3000"
+      },
+      "last_get_login_info": {
+        "status": "ok",
+        "retcode": 0,
+        "user_id": "3974470627",
+        "nickname": "邪恶男娘爱好者"
+      }
+    },
+    {
+      "role": "tester",
+      "qq_uin": "3615811141",
+      "nickname": "不吃香菜",
+      "actual_container": "napcat-qq2",
+      "expected_container_for_current_backend": "napcat-qq2",
+      "docker_ports": {
+        "onebot_http_container_port": 3000,
+        "onebot_http_host": "127.0.0.1",
+        "onebot_http_host_port": 3610,
+        "webui_container_port": 6099,
+        "webui_host": "127.0.0.1",
+        "webui_host_port": 16109,
+        "extra_mapped_host_port": 3611
+      },
+      "urls": {
+        "backend_onebot_url": "http://napcat-qq2:3000",
+        "host_onebot_url": "http://127.0.0.1:3610",
+        "host_webui_url": "http://127.0.0.1:16109/webui",
+        "local_tunnel_webui_url": "http://127.0.0.1:18092/webui?token=c03b5ac9"
+      },
+      "webui": {
+        "token": "c03b5ac9",
+        "login_rate": 10,
+        "auto_login_account": ""
+      },
+      "onebot11": {
+        "active_config_path": "/app/napcat/config/onebot11_3615811141.json",
+        "http_server": {
+          "enable": true,
+          "name": "mortis-http",
+          "host": "0.0.0.0",
+          "port": 3000,
+          "enable_cors": true,
+          "enable_websocket": false,
+          "message_post_format": "array",
+          "token": "",
+          "debug": false
+        },
+        "http_client": {
+          "enable": true,
+          "name": "mortis-inbound",
+          "url": "http://multica-backend-1:8080/api/qq/onebot?secret=mortis-qq-inbound-20260505",
+          "message_post_format": "array",
+          "report_self_message": false,
+          "debug": false
+        },
+        "legacy_or_extra_configs": [
+          {
+            "path": "/app/napcat/config/onebot11_3316734532.json",
+            "note": "also enabled during recovery so either remembered account can expose OneBot after login"
+          }
+        ]
+      },
+      "backend_env": {
+        "MORTIS_AI_TESTER_QQ": "3615811141",
+        "MORTIS_AI_TESTER_ONEBOT_URL": "http://napcat-qq2:3000"
+      },
+      "last_get_login_info": {
+        "status": "ok",
+        "retcode": 0,
+        "user_id": "3615811141",
+        "nickname": "不吃香菜"
+      }
+    },
+    {
+      "role": "builder",
+      "qq_uin": "3316734532",
+      "nickname": "東風 ソラ",
+      "actual_container": "napcat-qq3",
+      "expected_container_for_current_backend": "napcat-qq3",
+      "docker_ports": {
+        "onebot_http_container_port": 3000,
+        "onebot_http_host": "127.0.0.1",
+        "onebot_http_host_port": 3620,
+        "webui_container_port": 6099,
+        "webui_host": "127.0.0.1",
+        "webui_host_port": 16119,
+        "extra_mapped_host_port": 3621
+      },
+      "urls": {
+        "backend_onebot_url": "http://napcat-qq3:3000",
+        "host_onebot_url": "http://127.0.0.1:3620",
+        "host_webui_url": "http://127.0.0.1:16119/webui",
+        "local_tunnel_webui_url": "http://127.0.0.1:18093/webui?token=6cda08c0"
+      },
+      "webui": {
+        "token": "6cda08c0",
+        "login_rate": 10,
+        "auto_login_account": "3316734532"
+      },
+      "login_state": {
+        "compose_service_file": "/home/ubuntu/napcat/docker-compose.yml",
+        "compose_required_environment": {
+          "ACCOUNT": "3316734532",
+          "NAPCAT_QUICK_PASSWORD": "read from /home/ubuntu/napcat/.env key NAPCAT_QQ3_QUICK_PASSWORD"
+        },
+        "persistent_host_paths": {
+          "qq_login_cache": "/home/ubuntu/napcat/data/qq-3/qq",
+          "napcat_config": "/home/ubuntu/napcat/data/qq-3/config",
+          "napcat_plugins": "/home/ubuntu/napcat/data/qq-3/plugins"
+        },
+        "important_boundary": "The QQ login cache directory is the only durable local login-state storage. It is not a permanent credential that can be fully reconstructed from JSON. If QQ/NapCat reports '你的用户身份已失效，为保证账号安全，请你重新登录', the server-side session has expired and the account must be authorized again.",
+        "credential_storage": {
+          "host_file": "/home/ubuntu/napcat/.env",
+          "owner_mode": "ubuntu:ubuntu 0600",
+          "keys": [
+            "NAPCAT_QQ3_ACCOUNT",
+            "NAPCAT_QQ3_QUICK_PASSWORD"
+          ],
+          "note": "Password is intentionally not duplicated in this JSON. The operational source is the production secret file above."
+        },
+        "last_incident": {
+          "observed_at": "2026-05-06T13:34:32+08:00",
+          "symptom": "Builder messages appeared in napcat-qq3 local message_sent/self history but were not visible from other QQ accounts.",
+          "root_cause": "napcat-qq3 send_group_msg timed out at NTEvent NodeIKernelMsgService/sendMsg and later fast login failed because QQ identity was invalidated. Password fallback worked after /home/ubuntu/napcat/.env was populated, but Tencent required SMS/security captcha verification.",
+          "evidence": [
+            "napcat-qq3 logs repeatedly showed sendMsg timeout with EventRet {} after messages from 3316734532.",
+            "Cross-account history from ports 3600/3610/3630 did not contain later Builder marker messages.",
+            "After restart with ACCOUNT=3316734532, NapCat logged: 快速登录错误：你的用户身份已失效，为保证账号安全，请你重新登录。",
+            "After adding NAPCAT_QQ3_QUICK_PASSWORD, NapCat logged that password fallback started and then required sms-verify-login captcha for uin=3316734532."
+          ],
+          "operator_correction": "Do not claim Builder spoke in the group unless a different account can read the message from group history. napcat-qq3 self-history alone is not proof of public visibility."
+        }
+      },
+      "onebot11": {
+        "active_config_path": "/app/napcat/config/onebot11_3316734532.json",
+        "http_server": {
+          "enable": true,
+          "name": "mortis-http",
+          "host": "0.0.0.0",
+          "port": 3000,
+          "enable_cors": true,
+          "enable_websocket": false,
+          "message_post_format": "array",
+          "token": "",
+          "debug": false
+        },
+        "http_client": {
+          "enable": true,
+          "name": "mortis-inbound",
+          "url": "http://multica-backend-1:8080/api/qq/onebot?secret=mortis-qq-inbound-20260505",
+          "message_post_format": "array",
+          "report_self_message": false,
+          "debug": false
+        },
+        "legacy_or_extra_configs": [
+          {
+            "path": "/app/napcat/config/onebot11_3615811141.json",
+            "note": "also enabled during recovery so either remembered account can expose OneBot after login"
+          }
+        ]
+      },
+      "backend_env": {
+        "MORTIS_AI_BUILDER_QQ": "3316734532",
+        "MORTIS_AI_BUILDER_ONEBOT_URL": "http://napcat-qq3:3000"
+      },
+      "last_get_login_info": {
+        "status": "ok",
+        "retcode": 0,
+        "user_id": "3316734532",
+        "nickname": "東風 ソラ"
+      }
+    },
+    {
+      "role": "watcher",
+      "qq_uin": "2264869713",
+      "nickname": "法式长棍面包",
+      "actual_container": "napcat-qq4",
+      "expected_container_for_current_backend": "napcat-qq4",
+      "docker_ports": {
+        "onebot_http_container_port": 3000,
+        "onebot_http_host": "127.0.0.1",
+        "onebot_http_host_port": 3630,
+        "webui_container_port": 6099,
+        "webui_host": "127.0.0.1",
+        "webui_host_port": 16129,
+        "extra_mapped_host_port": 3631
+      },
+      "urls": {
+        "backend_onebot_url": "http://napcat-qq4:3000",
+        "host_onebot_url": "http://127.0.0.1:3630",
+        "host_webui_url": "http://127.0.0.1:16129/webui",
+        "local_tunnel_webui_url": null
+      },
+      "webui": {
+        "token": "c3ee2cbb",
+        "login_rate": 10,
+        "auto_login_account": ""
+      },
+      "onebot11": {
+        "active_config_path": "/app/napcat/config/onebot11_2264869713.json",
+        "http_server": {
+          "enable": true,
+          "name": "mortis-http",
+          "host": "0.0.0.0",
+          "port": 3000,
+          "enable_cors": true,
+          "enable_websocket": false,
+          "message_post_format": "array",
+          "token": "",
+          "debug": false
+        },
+        "http_client": {
+          "enable": true,
+          "name": "mortis-inbound",
+          "url": "http://multica-backend-1:8080/api/qq/onebot?secret=mortis-qq-inbound-20260505",
+          "message_post_format": "array",
+          "report_self_message": false,
+          "debug": false
+        }
+      },
+      "backend_env": {
+        "MORTIS_AI_WATCHER_QQ": "2264869713",
+        "MORTIS_AI_WATCHER_ONEBOT_URL": "http://napcat-qq4:3000"
+      },
+      "last_get_login_info": {
+        "status": "ok",
+        "retcode": 0,
+        "user_id": "2264869713",
+        "nickname": "法式长棍面包"
+      }
+    }
+  ],
+  "backend_env_required": {
+    "MORTIS_AI_CEO_QQ": "3974470627",
+    "MORTIS_AI_CEO_ONEBOT_URL": "http://napcat-qq1:3000",
+    "MORTIS_AI_BUILDER_QQ": "3316734532",
+    "MORTIS_AI_BUILDER_ONEBOT_URL": "http://napcat-qq3:3000",
+    "MORTIS_AI_TESTER_QQ": "3615811141",
+    "MORTIS_AI_TESTER_ONEBOT_URL": "http://napcat-qq2:3000",
+    "MORTIS_AI_WATCHER_QQ": "2264869713",
+    "MORTIS_AI_WATCHER_ONEBOT_URL": "http://napcat-qq4:3000",
+    "MORTIS_QQ_BOT_USER_IDS": "3974470627,3316734532,3615811141,2264869713",
+    "MORTIS_QQ_LIVING_AGENTS_ENABLED": "true",
+    "MORTIS_QQ_LIVING_GROUP_ID": "474958794",
+    "MORTIS_QQ_INBOUND_ACK_ENABLED": "false",
+    "MORTIS_QQ_INBOUND_SECRET": "mortis-qq-inbound-20260505"
+  },
+  "known_runtime_placement": {
+    "ceo": "napcat-qq1",
+    "tester": "napcat-qq2",
+    "builder": "napcat-qq3",
+    "watcher": "napcat-qq4"
+  },
+  "napcat_compose_required_accounts": {
+    "compose_file": "/home/ubuntu/napcat/docker-compose.yml",
+    "rule": "Each NapCat service must pin its QQ account with ACCOUNT so container restart uses the intended cached login state instead of falling back to the wrong remembered account or QR login.",
+    "services": {
+      "napcat-qq1": {
+        "role": "ceo",
+        "ACCOUNT": "3974470627"
+      },
+      "napcat-qq2": {
+        "role": "tester",
+        "ACCOUNT": "3615811141",
+        "NAPCAT_QUICK_PASSWORD": "read from /home/ubuntu/napcat/.env key NAPCAT_QQ2_QUICK_PASSWORD"
+      },
+      "napcat-qq3": {
+        "role": "builder",
+        "ACCOUNT": "3316734532",
+        "NAPCAT_QUICK_PASSWORD": "read from /home/ubuntu/napcat/.env key NAPCAT_QQ3_QUICK_PASSWORD"
+      },
+      "napcat-qq4": {
+        "role": "watcher",
+        "ACCOUNT": "2264869713",
+        "NAPCAT_QUICK_PASSWORD": "read from /home/ubuntu/napcat/.env key NAPCAT_QQ4_QUICK_PASSWORD"
+      }
+    }
+  },
+  "login_durability_and_watchdog": {
+    "incident_summary": {
+      "date": "2026-05-06",
+      "affected_role": "builder",
+      "affected_account": "3316734532",
+      "why_it_dropped": [
+        "QQ server invalidated the local NapCat login state for 3316734532.",
+        "Before the fix, /home/ubuntu/napcat/docker-compose.yml did not reliably pin ACCOUNT and password fallback for every service, so restarting qq3 fell back to QR/security login.",
+        "NapCat send_group_msg returned a failed OneBot envelope with NTEvent sendMsg timeout; local message_sent/self history looked like speech but other accounts could not see it."
+      ],
+      "what_is_fixed": [
+        "qq2/qq3/qq4 credentials are stored in /home/ubuntu/napcat/.env with mode 0600.",
+        "/home/ubuntu/napcat/docker-compose.yml pins ACCOUNT and NAPCAT_QUICK_PASSWORD env for all four services.",
+        "server/internal/qqagents/runtime.go now treats OneBot status=failed envelopes as send errors instead of accepting HTTP 200.",
+        "Builder visibility must be verified from another QQ account after repair."
+      ],
+      "remaining_external_limit": "Tencent may require SMS/security captcha even when ACCOUNT and password fallback are correct. This cannot be fully avoided by Mortis."
+    },
+    "watchdog": {
+      "script": "/usr/local/bin/napcat-watchdog",
+      "systemd_service": "mortis-napcat-watchdog.service",
+      "systemd_timer": "mortis-napcat-watchdog.timer",
+      "interval": "1 minute",
+      "state_file": "/srv/multica/openlist-export/runtime/napcat-watchdog-state.jsonl",
+      "alert_channel": "QQ group 474958794 through any other online NapCat account",
+      "cooldown_seconds": 900,
+      "manual_commands": {
+        "run_now": "sudo systemctl start mortis-napcat-watchdog.service",
+        "timer_status": "systemctl list-timers --all mortis-napcat-watchdog.timer",
+        "logs": "journalctl -u mortis-napcat-watchdog.service -n 80 --no-pager",
+        "state_tail": "tail -20 /srv/multica/openlist-export/runtime/napcat-watchdog-state.jsonl"
+      }
+    }
+  },
+  "ssh_tunnel_commands": {
+    "all_webui": "ssh -N -L 18091:127.0.0.1:16099 -L 18092:127.0.0.1:16109 -L 18093:127.0.0.1:16119 -L 18094:127.0.0.1:16129 ubuntu@124.220.233.126",
+    "qq2_qq3_webui_only": "ssh -N -L 18092:127.0.0.1:16109 -L 18093:127.0.0.1:16119 ubuntu@124.220.233.126",
+    "open_urls": [
+      "http://127.0.0.1:18091/webui?token=a6f15794",
+      "http://127.0.0.1:18092/webui?token=c03b5ac9",
+      "http://127.0.0.1:18093/webui?token=6cda08c0",
+      "http://127.0.0.1:18094/webui?token=c3ee2cbb"
+    ]
+  },
+  "verification_commands": {
+    "host_get_login_info": "for p in 3600 3610 3620 3630; do echo \"--- $p\"; curl -sS -m 8 -X POST \"http://127.0.0.1:${p}/get_login_info\" -H 'Content-Type: application/json' -d '{}'; echo; done",
+    "cross_account_visibility_check": "marker=\"builder-visible-$(date +%H%M%S)\"; curl -sS -m 20 -X POST http://127.0.0.1:3620/send_group_msg -H 'Content-Type: application/json' -d \"{\\\"group_id\\\":474958794,\\\"message\\\":\\\"$marker\\\"}\"; sleep 3; for p in 3600 3610 3630; do echo \"--- visible from $p\"; curl -sS -m 8 -X POST http://127.0.0.1:$p/get_group_msg_history -H 'Content-Type: application/json' -d '{\"group_id\":474958794,\"count\":40}' | grep -F \"$marker\" || echo NOT_VISIBLE; done",
+    "container_ports": "sudo docker ps -a --format 'table {{.Names}}\\t{{.Status}}\\t{{.Ports}}' | grep -E 'napcat|multica-backend'",
+    "backend_env": "cd /srv/multica && sudo docker compose -f docker-compose.selfhost.yml exec -T backend sh -lc 'env | grep -E \"MORTIS_AI_.*(QQ|ONEBOT_URL)|MORTIS_QQ_(BOT_USER_IDS|LIVING_GROUP_ID|LIVING_AGENTS_ENABLED|INBOUND_ACK_ENABLED|INBOUND_SECRET)\" | sort'",
+    "backend_logs": "cd /srv/multica && sudo docker compose -f docker-compose.selfhost.yml logs --tail=160 backend | grep -E 'starting human-like qq agents|qq living agent account offline|qq living agent replied|qq living agents no speaker|qq living agents llm' || true",
+    "group_history": "curl -sS -m 8 -X POST http://127.0.0.1:3600/get_group_msg_history -H 'Content-Type: application/json' -d '{\"group_id\":474958794,\"count\":20}'"
+  },
+  "recovery_steps": [
+    "Set MORTIS_QQ_LIVING_AGENTS_ENABLED=false before re-login, QR scan, or container restart if the group is at risk of spam.",
+    "Use the SSH tunnel commands above to open NapCat WebUI pages locally.",
+    "Use the tokenized WebUI URLs above when a page asks for a token.",
+    "After login, run host_get_login_info and verify all four ports return the expected QQ UINs.",
+    "Current correct mapping is CEO->napcat-qq1, Tester->napcat-qq2, Builder->napcat-qq3, Watcher->napcat-qq4.",
+    "Before restarting any NapCat account, verify /home/ubuntu/napcat/docker-compose.yml pins ACCOUNT for that service.",
+    "If get_login_info fails after restart and logs say QQ identity is invalidated, the saved QQ login cache cannot be repaired from JSON; re-authorize the account and then re-run host_get_login_info.",
+    "After any Builder login or send fix, run cross_account_visibility_check. Do not accept napcat-qq3 message_sent/self history as proof that the group saw the message.",
+    "Ensure /srv/multica/.env explicitly contains Builder->http://napcat-qq3:3000 and Tester->http://napcat-qq2:3000 because docker-compose.selfhost.yml defaults are the opposite for those two.",
+    "Force-recreate backend after changing .env: sudo docker compose -f docker-compose.selfhost.yml up -d --force-recreate backend.",
+    "Only re-enable living agents after backend logs show no qq living agent account offline warnings.",
+    "Keep MORTIS_QQ_INBOUND_ACK_ENABLED=false in the living-agent group."
+  ],
+  "last_successful_get_login_info": {
+    "3600": {
+      "user_id": "3974470627",
+      "nickname": "邪恶男娘爱好者"
+    },
+    "3610": {
+      "user_id": "3615811141",
+      "nickname": "不吃香菜"
+    },
+    "3620": {
+      "user_id": "3316734532",
+      "nickname": "東風 ソラ"
+    },
+    "3630": {
+      "user_id": "2264869713",
+      "nickname": "法式长棍面包"
+    }
+  }
+}

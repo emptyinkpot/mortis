@@ -36,3 +36,15 @@ docs/
 
 # Desktop app (not needed for web self-hosting)
 apps/desktop
+# Runtime state
+agent-workspaces
+codex-home
+openlist-export
+
+# Local runtime state must never enter Docker build context.
+/codex-home/
+/codex-home/**
+/agent-workspaces/
+/agent-workspaces/**
+/openlist-export/
+/openlist-export/**

@@ -1,50 +1,37 @@
 ---
-title: Welcome
-description: A task collaboration platform — humans and AI agents working together in the same workspace.
+title: 首页
+description: Mortis 私人工作台说明。
 ---
 
-import { Callout } from "fumadocs-ui/components/callout";
+## Mortis 是什么？
 
-Multica is a task collaboration platform where humans and AI [agents](/agents) work together in the same [workspace](/workspaces). You can [assign an issue to an agent](/assigning-issues) the way you'd hand work to a teammate — it executes the work, reports progress, and replies in the comments. You can also [open a chat window and talk to it directly](/chat), asking it to draft an issue, answer a question, or handle a one-off request.
+Mortis 是一个基于 Multica 收口而成的私人单用户智能体工作台。它保留了受管智能体、事项、项目、运行时与技能体系，但把外层品牌、入口与使用方式调整为更适合个人长期使用的私有部署形态。
 
-This page explains where agents run and the ways you can start using Multica.
+当前这套实例的目标不是做公开 SaaS，而是作为个人控制台：
 
-## Where agents run
+- 用一个固定身份直接进入工作区
+- 统一管理事项、项目、智能体与运行时
+- 把高频界面收口为中文可读表达
+- 保持内部兼容名称稳定，避免不必要的高耦合迁移
 
-Agents do **not** execute tasks on Multica's servers. Multica currently supports one runtime model:
+## 当前文档重点
 
-- **Local [daemon](/daemon-runtimes)** — you run `multica daemon` on your own machine, and it drives the [AI coding tools](/providers) installed locally. Eleven are built in today: [Claude Code](/providers#claude-code), [Codex](/providers#codex), [Cursor](/providers#cursor), [Copilot](/providers#copilot), [Gemini](/providers#gemini), [Hermes](/providers#hermes), [Kimi](/providers#kimi), [Kiro CLI](/providers#kiro-cli), [OpenCode](/providers#opencode), [OpenClaw](/providers#openclaw), [Pi](/providers#pi). Your API keys, toolchain, and code directories stay on your machine.
+- 私有部署与域名切换
+- 单用户自动进入模式
+- 工作区、智能体、运行时与技能的日常使用
+- 可见品牌层与内部标识层的迁移边界
 
-<Callout type="info">
-**Cloud runtimes are coming**, currently waitlist-only. Once live, you won't need a local daemon — agent tasks will execute on Multica Cloud directly. Sign up on the [Downloads](https://multica.ai/download) page to get notified.
-</Callout>
+## 技术底座
 
-## Three ways to use Multica
+| 层级 | 当前技术栈 |
+|-------|------------|
+| 前端 | Next.js 16 (App Router) |
+| 后端 | Go (Chi router, sqlc, gorilla/websocket) |
+| 数据库 | PostgreSQL 17 with pgvector |
+| 运行时 | 本地 / 远程 daemon 执行 Claude Code、Codex、OpenClaw、OpenCode、Hermes、Gemini 等 CLI |
 
-The first two cards are **backend choices** — where the Multica server runs. The third is a **client choice** — which interface you use. The desktop app pairs with either backend.
+## 使用建议
 
-<NumberedCards>
-  <NumberedCard number="01" title="Multica Cloud" href="/cloud-quickstart" tag="Waitlist">
-    Managed backend. Install the CLI, run the daemon locally, and connect to the Multica-hosted server. Takes about 5 minutes.
-  </NumberedCard>
-  <NumberedCard number="02" title="Self-host" href="/self-host-quickstart" tag="Docker · Helm">
-    Run the full backend on your own server with Docker Compose. Database, server, and storage all live on your infrastructure.
-  </NumberedCard>
-  <NumberedCard number="03" title="Desktop app" href="/desktop-app" tag="Recommended">
-    Native multi-tab window. Ships with the CLI built in and starts the daemon on launch — zero commands to run after install. Connects to Multica Cloud or your self-hosted backend.
-  </NumberedCard>
-</NumberedCards>
-
-## Next steps
-
-<NumberedSteps>
-  <Step number="01" title="Start with the runtime model">
-    [How Multica works](/how-multica-works) — 30 seconds to read, and it settles the "server doesn't run agents, agents run on your machine" point once and for all.
-  </Step>
-  <Step number="02" title="Pick a way to start">
-    Choose one of the three above — most people start with the [desktop app](/desktop-app). No CLI setup, up and running in 5 minutes.
-  </Step>
-  <Step number="03" title="Assign your first issue">
-    Create an [issue](/issues) and pick an agent as the assignee instead of a teammate. Wait for it to deliver.
-  </Step>
-</NumberedSteps>
+- 如果你只需要日常使用，直接进入 Mortis 主站即可
+- 如果你要做运维或迁移，优先看部署说明与运行维护文档
+- 如果你要继续深入改名，先单独设计“内部标识迁移方案”，不要直接硬改高耦合内部名

@@ -2,21 +2,6 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Conventions reference
-
-The single source of truth for **code naming, the i18n translation glossary, and the Chinese voice guide** is the docs site:
-
-- **`apps/docs/content/docs/developers/conventions.mdx`** (English)
-- **`apps/docs/content/docs/developers/conventions.zh.mdx`** (Chinese)
-
-Read that page before:
-
-- Writing or editing translations (`packages/views/locales/`)
-- Naming a new route, package, file, DB column, or TS type
-- Writing Chinese product copy (UI strings, error messages, docs)
-
-The legacy `packages/views/locales/glossary.md` is now a stub redirecting to the docs page; do not rely on it.
-
 ## Project Context
 
 Multica is an AI-native task management platform — like Linear, but with AI agents as first-class citizens.
@@ -121,7 +106,6 @@ pnpm ui:add badge                # Adds component to packages/ui/components/ui/
 # Infrastructure
 make db-up            # Start shared PostgreSQL (pgvector/pg17 image)
 make db-down          # Stop shared PostgreSQL
-make db-reset         # Drop + recreate current env's DB, then re-run migrations (local only; stop backend first)
 ```
 
 ### CI Requirements
@@ -140,44 +124,53 @@ make setup-worktree     # Setup using .env.worktree
 make start-worktree     # Start using .env.worktree
 ```
 
+## Concurrent Workstream Protocol
+
+When multiple people or agents are editing this repo at the same time, use one shared ledger instead of ad-hoc chat notes or parallel tracker files.
+This protocol is for agents to execute themselves. Do not ask the user to maintain the ledger or run these commands on the agent's behalf.
+
+- Canonical ledger: `.codex/workstreams.jsonl`
+- Canonical helper: `scripts/workstream.ps1`
+- The ledger is append-only JSONL. Do not rewrite history in place and do not create parallel active ledgers elsewhere in the repo.
+
+### Required flow
+
+1. Before non-trivial work, the agent must inspect the ledger itself: `./scripts/workstream.ps1 show -ActiveOnly` or `./scripts/workstream.ps1 show -Paths <target-path>`
+2. The agent must claim its boundary before editing: `./scripts/workstream.ps1 claim -Id <workstream-id> -Task "<task>" -Paths <path1>,<path2>`
+3. Refresh with `heartbeat` every substantial batch or roughly every 10 minutes while the work is active
+4. If the agent needs to touch a path already owned by someone else, record `shared-touch` first with a note about the overlap
+5. If the work is being passed to another person or agent, record `handoff`
+6. After verification and push, the agent must append `done -Commit <sha> -Verify "<command or artifact>"`
+7. If the agent stops without finishing, record `release`
+
+### Boundary rules
+
+- `paths` must be specific enough to show the real ownership boundary
+- Use `show -Paths <path>` to inspect overlap before touching a disputed file or directory
+- Do not stage or commit unrelated paths that are currently claimed by another active workstream
+- Use one stable `id` for the whole workstream and append new events under that same id
+- Prefer `show -ActiveOnly` when checking what is currently in flight
+- If the user says "continue", do not bounce the coordination burden back to them; update the ledger and keep going
+
+### Minimal examples
+
+```bash
+./scripts/workstream.ps1 show -Paths packages/views/search/search-command.tsx
+./scripts/workstream.ps1 claim -Id ws-search-command-tests -Task "Refine search command keyboard behavior" -Paths packages/views/search/search-command.tsx,packages/views/search/search-command.test.tsx
+./scripts/workstream.ps1 heartbeat -Id ws-search-command-tests -Notes "Adjusted query reset behavior after navigation"
+./scripts/workstream.ps1 done -Id ws-search-command-tests -Commit abc1234 -Verify "pnpm --filter @multica/views exec vitest run search-command.test.tsx"
+```
+
 ## Coding Rules
 
 - TypeScript strict mode is enabled; keep types explicit.
 - Go code follows standard Go conventions (gofmt, go vet).
 - Keep comments in code **English only**.
 - Prefer existing patterns/components over introducing parallel abstractions.
-- Unless the user explicitly asks for backwards compatibility, do **not** add compatibility layers, fallback paths, dual-write logic, legacy adapters, or temporary shims **for internal, non-boundary code** (a function calling another function in the same package, a component reading its own state, a store helper, etc.).
-- This rule does **not** apply at API boundaries: the desktop app cannot assume the backend it talks to has the same shape as the one it was built against (older desktop installs will outlive any given server build). API response handling must follow the rules in **API Response Compatibility** below — that is a defensive boundary, not a legacy shim.
+- Unless the user explicitly asks for backwards compatibility, do **not** add compatibility layers, fallback paths, dual-write logic, legacy adapters, or temporary shims.
 - If a flow or API is being replaced and the product is not yet live, prefer removing the old path instead of preserving both old and new behavior.
 - Avoid broad refactors unless required by the task.
 - New global (pre-workspace) routes MUST use a single word (`/login`, `/inbox`) or a `/{noun}/{verb}` pair (`/workspaces/new`). NEVER add hyphenated word-group root routes (`/new-workspace`, `/create-team`) — they collide with common user workspace names and force endless reserved-slug audits. Reserving the noun (`workspaces`) automatically protects the entire `/workspaces/*` subtree.
-- The reserved-slug list lives in **one** place: `server/internal/handler/reserved_slugs.json`. The Go side embeds the JSON; `packages/core/paths/reserved-slugs.ts` is generated from it by `pnpm generate:reserved-slugs`. Edit the JSON, run the generator, commit both. CI re-runs the generator and fails on any drift, so a stale TS file cannot land.
-
-### API Response Compatibility
-
-The desktop app installed on a user's machine is older than any backend it talks to: a user on 0.2.26 will hit a server running 0.3.x, then 0.4.x, then beyond. Every response shape is a contract that **will** drift, and the frontend must survive drift without white-screening. Three concrete incidents already happened from violating this — #2143, #2147, #2192.
-
-When writing code that consumes an API response, follow these rules:
-
-- **Parse, don't cast.** Untyped JSON crossing the network is not `T`. Use `parseWithFallback` in `packages/core/api/schema.ts` with a `zod` schema and an explicit fallback. On validation failure it logs a warning and returns the fallback; it never throws into the UI.
-- **No bare `as` casts on response bodies.** Every endpoint method whose response is consumed by UI logic must run through a schema before returning.
-- **Optional-chain and default everywhere downstream.** Treat every field as possibly missing. Use explicit boolean checks (`=== true`) over truthy/falsy negation, which silently treats `undefined` and `null` as `false`.
-- **Don't pin a UI affordance to a single backend field.** If a button or indicator depends on exactly one boolean from the server, a backend bug deletes it. Combine signals (cursor presence, page length, etc.) so the affordance stays available in the worst case.
-- **Enum drift downgrades, not crashes.** A new server-side enum value should render a generic fallback. `switch` statements on server-driven strings must have a `default` branch.
-- **When you add or change an endpoint:** add the schema in the same PR, and write at least one test that feeds a malformed response through it (missing field, wrong type, `null` array). The test fails closed if a future change breaks the contract.
-
-This is not premature defense — it is the *only* defense for an installed-app architecture. CSR-only browser apps can ship a fix in minutes; an Electron build sitting on a developer's laptop cannot.
-
-### Backend Handler UUID Parsing Convention
-
-Every Go handler in `server/internal/handler/` follows these rules. The convention exists because `util.ParseUUID` used to silently return a zero UUID on invalid input, which caused #1661 — a `DELETE` returning 204 success while the SQL `DELETE` matched zero rows.
-
-- **Resource path params that accept either a UUID or a human-readable identifier** (e.g. `chi.URLParam(r, "id")` for an issue, which accepts both `MUL-123` and a UUID) MUST be resolved through the dedicated loader (`loadIssueForUser` / `loadSkillForUser` / `loadAgentForUser` / `requireDaemonRuntimeAccess`). After resolution, all subsequent DB calls — especially `Queries.Delete*` / `Queries.Update*` — MUST use `entity.ID` from the resolved object. Never round-trip the raw URL string through `parseUUID` for a write query.
-- **Pure-UUID inputs from request boundaries** (URL params that are always UUIDs, request body fields, query params, headers) MUST be validated with `parseUUIDOrBadRequest(w, s, fieldName)`. On invalid input it writes a 400 and returns `ok=false` — return immediately.
-- **Trusted UUID round-trips** (sqlc-returned UUIDs being passed back into queries, test fixtures) use `parseUUID(s)` which calls `util.MustParseUUID` and panics on invalid input. A panic here means an unguarded user-input string slipped in — that is a real bug. `chi`'s `middleware.Recoverer` translates the panic into a 500 so the process keeps running.
-- **`util.ParseUUID(s) (pgtype.UUID, error)`** is the only safe variant outside the handler package. Always check the error.
-
-When adding a `Queries.Delete*` or `Queries.Update*` call, ask: "Where did this UUID come from?" If the answer is "raw user input that hasn't been validated," route it through `parseUUIDOrBadRequest` or a loader first.
 
 ### Package Boundary Rules
 
@@ -234,18 +227,26 @@ Every path in the desktop app falls into exactly one category. Choosing the wron
 
 **Adding a new pre-workspace flow on desktop**: register a new `WindowOverlay` type in `stores/window-overlay-store.ts`. Do NOT add it to `routes.tsx`. If a shared view needs the flow on both platforms, add the route on web (`apps/web/app/(auth)/...`) AND the overlay type on desktop — the shared view component is identical.
 
-### Workspace context
+### Workspace identity singleton
 
-`setCurrentWorkspace(slug, uuid)` from `@multica/core/platform` is the single source of truth for the active workspace. `WorkspaceRouteLayout` sets it on mount; unmount does NOT clear it. Code that leaves workspace context (leave/delete workspace, force-navigate to overlay) must call `setCurrentWorkspace(null, null)` explicitly.
+`setCurrentWorkspace(slug, uuid)` in `@multica/core/platform` is the single source of truth for "which workspace is active right now". Three consumers depend on it:
+
+1. API client's `X-Workspace-Slug` header.
+2. Zustand per-workspace storage namespace.
+3. Chrome gating (`{slug && <AppSidebar />}` on desktop, similar on web).
+
+Normally set by `WorkspaceRouteLayout` when its route mounts. Critically: **unmount does NOT clear it.** Any code that leaves workspace context (leave workspace, delete workspace, force navigation to overlay) must call `setCurrentWorkspace(null, null)` explicitly — otherwise the realtime `workspace:deleted` handler races the mutation, chrome gating stays truthy while the workspace is gone from cache, and `useWorkspaceId` throws.
 
 ### Workspace destructive operations
 
-Leave / Delete workspace flows must follow this order, otherwise concurrent refetches race and the renderer hard-reloads:
+Leave / Delete workspace flows must follow this order:
 
-1. Read destination from cached workspace list.
+1. Read destination from cached workspace list (no extra fetch).
 2. `setCurrentWorkspace(null, null)`.
-3. `navigation.push(destination)`.
+3. `navigation.push(destination)` — switch to next workspace or open new-workspace overlay.
 4. THEN `await mutation.mutateAsync(workspaceId)`.
+
+Reversing step 4 with steps 1–3 (mutate first, navigate after) causes a three-way race between the mutation's `onSettled` invalidate, the explicit `navigateAway`, and the realtime handler's `relocateAfterWorkspaceLoss` — all refetching the same `workspaces` query concurrently. One gets cancelled, bubbles as `CancelledError`, and triggers `window.location.assign` → full renderer reload / white screen.
 
 ### Tab isolation
 
@@ -253,9 +254,28 @@ Tabs are grouped per workspace in `stores/tab-store.ts`. The TabBar shows only t
 
 Cross-workspace `push(path)` is detected by the navigation adapter (`platform/navigation.tsx`) and translated into `switchWorkspace(slug, targetPath)` — NOT a navigation within the current tab's router. Don't bypass the adapter; always go through `useNavigation()` from shared code.
 
-### Drag region (macOS)
+### Drag region (macOS window-move)
 
-Every full-window desktop view (anything outside the dashboard shell) must mount `<DragStrip />` from `@multica/views/platform` as the first flex child of the page root, otherwise users can't drag the window. Interactive UI inside the top 48px needs `WebkitAppRegion: "no-drag"` to stay clickable.
+Every full-window desktop view (login, overlay, any page that covers the native title bar) needs a top drag strip so users can move the window. On macOS the traffic lights are hidden via `useImmersiveMode` in overlay-style contexts, so the drag strip also gives back that corner for pointer-drag.
+
+**Pattern**: flex child at top, not absolute overlay.
+
+```tsx
+<div className="fixed inset-0 z-50 flex flex-col bg-background">
+  <div className="h-12 shrink-0" style={{ WebkitAppRegion: "drag" }} />
+  <div className="flex-1 overflow-auto" style={{ WebkitAppRegion: "no-drag" }}>
+    {/* page content — interactive elements need their own "no-drag" */}
+  </div>
+</div>
+```
+
+Why flex, not absolute: the absolute-strip + `z-index` approach relies on stacking-context hit-testing, which isn't reliable for `-webkit-app-region`. A real flex row with no siblings at that pixel is unambiguous. Height matches `MainTopBar` (48px / `h-12`) for consistency.
+
+Canonical examples: `components/window-overlay.tsx`, `pages/login.tsx`.
+
+### UX vs platform chrome
+
+UX affordances (Back button, Log out button, welcome copy, invite card) belong in `packages/views/` so web and desktop render identical content. Platform chrome (drag strip, `useImmersiveMode`, tab system interaction, traffic-light accommodation) lives in desktop-only code. Violating this split always produces platform divergence — if a button exists on desktop but not on web for the same flow, it's a signal the UX escaped into platform code.
 
 ## UI/UX Rules
 

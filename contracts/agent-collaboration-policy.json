@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "name": "agent-collaboration-policy",
+  "mainBranch": "main",
+  "canonicalSourceRoot": "ubuntu@124.220.233.126:/srv/multica",
+  "directMainPush": false,
+  "requireTopicBranch": true,
+  "requireDedicatedWorktree": true,
+  "requireClaimBeforeEdit": true,
+  "forbidWholeWorktreeStaging": true,
+  "forbidRuntimeStateTracking": true,
+  "forbiddenCommands": [
+    "git add .",
+    "git commit -a",
+    "git push origin main",
+    "git push --force"
+  ],
+  "branchPatterns": [
+    "agent/<agent-id>/<task-slug>",
+    "fix/<agent-id>/<task-slug>",
+    "docs/<agent-id>/<task-slug>",
+    "refactor/<agent-id>/<task-slug>"
+  ],
+  "requiredBeforeEdit": [
+    "git fetch origin",
+    "git status --short --branch",
+    "read .runtime/claims/",
+    "read .runtime/timeline/",
+    "check overlapping claimed paths",
+    "create claim file",
+    "create dedicated worktree"
+  ],
+  "requiredBeforePush": [
+    "path-scoped git add",
+    "git diff --cached",
+    "repository policy check",
+    "project check"
+  ],
+  "deliveryStates": [
+    "pr-opened",
+    "branch-pushed",
+    "local-only-by-request",
+    "blocked"
+  ],
+  "runtimeStatePaths": [
+    "agent-workspaces/",
+    "openlist-export/",
+    "codex-home/",
+    ".runtime/claims/**",
+    ".runtime/timeline/**",
+    ".runtime/agents/**",
+    ".runtime/artifacts/**",
+    ".runtime/locks/**",
+    ".runtime/events/**",
+    ".runtime/mailboxes/**"
+  ],
+  "coordinationTruth": "claim-registry",
+  "coordinationRoot": ".runtime/",
+  "claimStatuses": [
+    "active",
+    "blocked",
+    "review",
+    "handoff",
+    "completed",
+    "abandoned"
+  ],
+  "requiredRuntimeDirectories": [
+    ".runtime/claims/",
+    ".runtime/timeline/",
+    ".runtime/agents/",
+    ".runtime/artifacts/",
+    ".runtime/locks/",
+    ".runtime/events/",
+    ".runtime/mailboxes/"
+  ]
+}

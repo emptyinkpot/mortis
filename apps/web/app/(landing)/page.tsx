@@ -4,14 +4,13 @@ import { RedirectIfAuthenticated } from "@/features/landing/components/redirect-
 
 export const metadata: Metadata = {
   title: {
-    absolute: "Multica — Project Management for Human + Agent Teams",
+    absolute: "Mortis —— 私人指挥工作区",
   },
   description:
-    "Open-source platform that turns coding agents into real teammates. Assign tasks, track progress, compound skills.",
+    "Mortis 是一个面向单一操作者与其 Agent 的私人指挥工作区。",
   openGraph: {
-    title: "Multica — Project Management for Human + Agent Teams",
-    description:
-      "Manage your human + agent workforce in one place.",
+    title: "Mortis —— 私人指挥工作区",
+    description: "面向单一操作者与其 Agent 的私人指挥工作区。",
     url: "/",
   },
   alternates: {

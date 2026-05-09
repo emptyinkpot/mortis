@@ -1,5 +1,4 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { matchLocale, LOCALE_COOKIE } from "@multica/core/i18n";
 
 // Old workspace-scoped route segments that existed before the URL refactor
 // (pre-#1131). Any URL with these as the FIRST segment is a legacy URL that
@@ -9,6 +8,7 @@ const LEGACY_ROUTE_SEGMENTS = new Set([
   "issues",
   "projects",
   "agents",
+  "internal-chat",
   "inbox",
   "my-issues",
   "autopilots",
@@ -17,40 +17,34 @@ const LEGACY_ROUTE_SEGMENTS = new Set([
   "settings",
 ]);
 
-// Resolve the active locale per request. Cookie wins over Accept-Language;
-// matchLocale() falls back to DEFAULT_LOCALE when neither yields a match.
-function resolveLocale(req: NextRequest): string {
-  const cookieLocale = req.cookies.get(LOCALE_COOKIE)?.value;
-  const acceptLanguage = req.headers.get("accept-language") ?? "";
-  const candidates: string[] = [];
-  if (cookieLocale) candidates.push(cookieLocale);
-  for (const part of acceptLanguage.split(",")) {
-    const tag = part.split(";")[0]?.trim();
-    if (tag) candidates.push(tag);
-  }
-  return matchLocale(candidates);
+const autoLoginSlug =
+  process.env.NEXT_PUBLIC_AUTO_LOGIN_WORKSPACE_SLUG ||
+  process.env.MULTICA_AUTO_LOGIN_WORKSPACE_SLUG ||
+  "";
+
+function autoLoginIssuesPath() {
+  return autoLoginSlug ? `/${autoLoginSlug}/issues` : "";
 }
 
-// Forward the resolved locale to RSC layouts via the `x-multica-locale`
-// request header. layout.tsx reads it through `await headers()`. The
-// `request: { headers }` form is what makes the header land on the upstream
-// request — without it the value would only sit on the response.
-function nextWithLocale(req: NextRequest): NextResponse {
-  const headers = new Headers(req.headers);
-  headers.set("x-multica-locale", resolveLocale(req));
-  return NextResponse.next({ request: { headers } });
-}
-
-// Next.js 16 renamed `middleware` → `proxy`. API surface (NextRequest /
-// NextResponse / cookies / matcher) is identical; the only behavioral
-// change is the runtime — proxy is forced to nodejs and cannot opt into
-// edge.
+// Next.js 16 renamed `middleware` to `proxy`. The runtime API is identical.
 export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const hasSession = req.cookies.has("multica_logged_in");
   const lastSlug = req.cookies.get("last_workspace_slug")?.value;
+  const preferredSlug = autoLoginSlug || lastSlug || "";
 
-  // --- Legacy URL redirect: /issues/... → /{slug}/issues/... ---
+  if (
+    pathname === "/login" &&
+    autoLoginSlug &&
+    !req.nextUrl.searchParams.has("cli_callback") &&
+    !req.nextUrl.searchParams.has("next")
+  ) {
+    const url = req.nextUrl.clone();
+    url.pathname = autoLoginIssuesPath();
+    return NextResponse.redirect(url);
+  }
+
+  // --- Legacy URL redirect: /issues/... to /{slug}/issues/... ---
   // Old bookmarks and clients that hit us before the slug migration would
   // otherwise 404 since the route moved under [workspaceSlug].
   const firstSegment = pathname.split("/")[1] ?? "";
@@ -58,13 +52,19 @@ export function proxy(req: NextRequest) {
     const url = req.nextUrl.clone();
 
     if (!hasSession) {
+      if (autoLoginSlug) {
+        url.pathname = `/${autoLoginSlug}${pathname}`;
+        return NextResponse.redirect(url);
+      }
+
       url.pathname = "/login";
       return NextResponse.redirect(url);
     }
 
-    if (lastSlug) {
-      // Preserve deep-link path + query: /issues/abc → /{lastSlug}/issues/abc
-      url.pathname = `/${lastSlug}${pathname}`;
+    if (preferredSlug) {
+      // Prefer the enforced private workspace slug so stale cookies cannot
+      // bounce single-user installs back to an old workspace.
+      url.pathname = `/${preferredSlug}${pathname}`;
       return NextResponse.redirect(url);
     }
 
@@ -76,21 +76,43 @@ export function proxy(req: NextRequest) {
   }
 
   // --- Root path: redirect logged-in users to their last workspace ---
-  if (pathname === "/" && hasSession && lastSlug) {
-    const url = req.nextUrl.clone();
-    url.pathname = `/${lastSlug}/issues`;
-    return NextResponse.redirect(url);
+  if (pathname === "/") {
+    if (!hasSession) {
+      if (autoLoginSlug) {
+        const url = req.nextUrl.clone();
+        url.pathname = autoLoginIssuesPath();
+        return NextResponse.redirect(url);
+      }
+      return NextResponse.next();
+    }
+
+    if (preferredSlug) {
+      const url = req.nextUrl.clone();
+      url.pathname = `/${preferredSlug}/issues`;
+      return NextResponse.redirect(url);
+    }
+
+    // No last_workspace_slug cookie: let landing page pick the first workspace
+    // client-side (features/landing/components/redirect-if-authenticated.tsx).
+    return NextResponse.next();
   }
 
-  // --- Default: forward locale header to RSC, no redirect/rewrite ---
-  // Covers logged-out root path, /login, /:slug/*, and everything else.
-  return nextWithLocale(req);
+  return NextResponse.next();
 }
 
 export const config = {
-  // i18n header must land on every page request, so we use the standard
-  // negative-lookahead pattern from Next's i18n guide: skip API routes
-  // (Go backend), Next internals, and any path with a file extension
-  // (favicons, sw.js, public/* assets).
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|.*\\.).*)"],
+  matcher: [
+    "/",
+    "/login",
+    "/issues/:path*",
+    "/projects/:path*",
+    "/agents/:path*",
+    "/internal-chat/:path*",
+    "/inbox/:path*",
+    "/my-issues/:path*",
+    "/autopilots/:path*",
+    "/runtimes/:path*",
+    "/skills/:path*",
+    "/settings/:path*",
+  ],
 };

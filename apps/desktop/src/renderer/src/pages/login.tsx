@@ -1,30 +1,24 @@
 import { LoginPage } from "@multica/views/auth";
-import { DragStrip } from "@multica/views/platform";
 import { MulticaIcon } from "@multica/ui/components/common/multica-icon";
 
-function requireRuntimeAppUrl(): string {
-  const runtimeConfig = window.desktopAPI.runtimeConfig;
-  if (!runtimeConfig.ok) {
-    throw new Error(
-      "Invariant violated: DesktopLoginPage rendered before App accepted runtime config",
-    );
-  }
-  return runtimeConfig.config.appUrl;
-}
+const WEB_URL = import.meta.env.VITE_APP_URL || "http://localhost:3000";
 
 export function DesktopLoginPage() {
-  const webUrl = requireRuntimeAppUrl();
   const handleGoogleLogin = () => {
     // Open web login page in the default browser with platform=desktop flag.
     // The web callback will redirect back via multica:// deep link with the token.
     window.desktopAPI.openExternal(
-      `${webUrl}/login?platform=desktop`,
+      `${WEB_URL}/login?platform=desktop`,
     );
   };
 
   return (
     <div className="flex h-screen flex-col">
-      <DragStrip />
+      {/* Traffic light inset */}
+      <div
+        className="h-[38px] shrink-0"
+        style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
+      />
       <LoginPage
         logo={<MulticaIcon bordered size="lg" />}
         onSuccess={() => {

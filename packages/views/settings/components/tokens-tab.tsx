@@ -35,12 +35,8 @@ import {
 import { Skeleton } from "@multica/ui/components/ui/skeleton";
 import { toast } from "sonner";
 import { api } from "@multica/core/api";
-import { useT } from "../../i18n";
-
-const EXPIRY_KEYS = ["30", "90", "365", "never"] as const;
 
 export function TokensTab() {
-  const { t } = useT("settings");
   const [tokens, setTokens] = useState<PersonalAccessToken[]>([]);
   const [tokenName, setTokenName] = useState("");
   const [tokenExpiry, setTokenExpiry] = useState("90");
@@ -56,11 +52,11 @@ export function TokensTab() {
       const list = await api.listPersonalAccessTokens();
       setTokens(list);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : t(($) => $.tokens.toast_load_failed));
+      toast.error(e instanceof Error ? e.message : "加载令牌失败");
     } finally {
       setTokensLoading(false);
     }
-  }, [t]);
+  }, []);
 
   useEffect(() => { loadTokens(); }, [loadTokens]);
 
@@ -74,7 +70,7 @@ export function TokensTab() {
       setTokenExpiry("90");
       await loadTokens();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : t(($) => $.tokens.toast_create_failed));
+      toast.error(e instanceof Error ? e.message : "创建令牌失败");
     } finally {
       setTokenCreating(false);
     }
@@ -85,9 +81,9 @@ export function TokensTab() {
     try {
       await api.revokePersonalAccessToken(id);
       await loadTokens();
-      toast.success(t(($) => $.tokens.toast_revoked));
+      toast.success("令牌已撤销");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : t(($) => $.tokens.toast_revoke_failed));
+      toast.error(e instanceof Error ? e.message : "撤销令牌失败");
     } finally {
       setTokenRevoking(null);
     }
@@ -105,31 +101,32 @@ export function TokensTab() {
       <section className="space-y-4">
         <div className="flex items-center gap-2">
           <Key className="h-4 w-4 text-muted-foreground" />
-          <h2 className="text-sm font-semibold">{t(($) => $.tokens.title)}</h2>
+          <h2 className="text-sm font-semibold">API 令牌</h2>
         </div>
 
         <Card>
           <CardContent className="space-y-3">
             <p className="text-xs text-muted-foreground">
-              {t(($) => $.tokens.description)}
+              个人访问令牌可供 CLI 与外部集成使用你的账户进行认证。
             </p>
             <div className="grid gap-3 sm:grid-cols-[1fr_120px_auto]">
               <Input
                 type="text"
                 value={tokenName}
                 onChange={(e) => setTokenName(e.target.value)}
-                placeholder={t(($) => $.tokens.name_placeholder)}
+                placeholder="令牌名称（例如：我的 CLI）"
               />
               <Select value={tokenExpiry} onValueChange={(v) => { if (v) setTokenExpiry(v); }}>
                 <SelectTrigger size="sm"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {EXPIRY_KEYS.map((key) => (
-                    <SelectItem key={key} value={key}>{t(($) => $.tokens.expiry[key])}</SelectItem>
-                  ))}
+                  <SelectItem value="30">30 天</SelectItem>
+                  <SelectItem value="90">90 天</SelectItem>
+                  <SelectItem value="365">1 年</SelectItem>
+                  <SelectItem value="never">永不过期</SelectItem>
                 </SelectContent>
               </Select>
               <Button onClick={handleCreateToken} disabled={tokenCreating || !tokenName.trim()}>
-                {tokenCreating ? t(($) => $.tokens.creating) : t(($) => $.tokens.create)}
+                {tokenCreating ? "创建中..." : "创建"}
               </Button>
             </div>
           </CardContent>
@@ -151,24 +148,14 @@ export function TokensTab() {
           </div>
         ) : tokens.length > 0 && (
           <div className="space-y-2">
-            {tokens.map((token) => (
-              <Card key={token.id}>
+            {tokens.map((t) => (
+              <Card key={t.id}>
                 <CardContent className="flex items-center gap-3">
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium truncate">{token.name}</div>
+                    <div className="text-sm font-medium truncate">{t.name}</div>
                     <div className="text-xs text-muted-foreground">
-                      {t(($) => $.tokens.metadata_prefix, {
-                        prefix: token.token_prefix,
-                        created: new Date(token.created_at).toLocaleDateString(),
-                        lastUsed: token.last_used_at
-                          ? t(($) => $.tokens.last_used_with_date, {
-                              date: new Date(token.last_used_at!).toLocaleDateString(),
-                            })
-                          : t(($) => $.tokens.last_used_never),
-                      })}
-                      {token.expires_at && t(($) => $.tokens.expires_with_date, {
-                        date: new Date(token.expires_at!).toLocaleDateString(),
-                      })}
+                      {t.token_prefix}... · 创建于 {new Date(t.created_at).toLocaleDateString()} · {t.last_used_at ? `最近使用 ${new Date(t.last_used_at).toLocaleDateString()}` : "从未使用"}
+                      {t.expires_at && ` · 到期于 ${new Date(t.expires_at).toLocaleDateString()}`}
                     </div>
                   </div>
                   <Tooltip>
@@ -177,15 +164,15 @@ export function TokensTab() {
                         <Button
                           variant="ghost"
                           size="icon-sm"
-                          onClick={() => setRevokeConfirmId(token.id)}
-                          disabled={tokenRevoking === token.id}
-                          aria-label={t(($) => $.tokens.revoke_aria, { name: token.name })}
+                          onClick={() => setRevokeConfirmId(t.id)}
+                          disabled={tokenRevoking === t.id}
+                          aria-label={`撤销 ${t.name}`}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       }
                     />
-                    <TooltipContent>{t(($) => $.tokens.revoke_tooltip)}</TooltipContent>
+                    <TooltipContent>撤销</TooltipContent>
                   </Tooltip>
                 </CardContent>
               </Card>
@@ -197,13 +184,13 @@ export function TokensTab() {
       <AlertDialog open={!!revokeConfirmId} onOpenChange={(v) => { if (!v) setRevokeConfirmId(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t(($) => $.tokens.revoke_dialog.title)}</AlertDialogTitle>
+            <AlertDialogTitle>撤销令牌</AlertDialogTitle>
             <AlertDialogDescription>
-              {t(($) => $.tokens.revoke_dialog.description)}
+              该令牌将被永久撤销且无法继续使用，此操作不可撤销。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{t(($) => $.tokens.revoke_dialog.cancel)}</AlertDialogCancel>
+            <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
               onClick={async () => {
@@ -211,7 +198,7 @@ export function TokensTab() {
                 setRevokeConfirmId(null);
               }}
             >
-              {t(($) => $.tokens.revoke_dialog.confirm)}
+              撤销
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -220,9 +207,9 @@ export function TokensTab() {
       <Dialog open={!!newToken} onOpenChange={(v) => { if (!v) { setNewToken(null); setTokenCopied(false); } }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{t(($) => $.tokens.created_dialog.title)}</DialogTitle>
+            <DialogTitle>令牌已创建</DialogTitle>
             <DialogDescription>
-              {t(($) => $.tokens.created_dialog.description)}
+              请立即复制你的个人访问令牌，关闭后将无法再次查看。
             </DialogDescription>
           </DialogHeader>
           <div className="flex items-center gap-2">
@@ -237,11 +224,11 @@ export function TokensTab() {
                   </Button>
                 }
               />
-              <TooltipContent>{t(($) => $.tokens.created_dialog.copy_tooltip)}</TooltipContent>
+              <TooltipContent>复制令牌</TooltipContent>
             </Tooltip>
           </div>
           <DialogFooter>
-            <Button onClick={() => { setNewToken(null); setTokenCopied(false); }}>{t(($) => $.tokens.created_dialog.done)}</Button>
+            <Button onClick={() => { setNewToken(null); setTokenCopied(false); }}>完成</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
