@@ -1,25 +1,25 @@
 {
-  "projectName": "Multica private fork",
+  "projectName": "mortis-multica-source",
   "canonicalDoc": "README.md",
   "machineReadableEntry": "project.json",
   "githubRepo": "https://github.com/emptyinkpot/mortis-multica-source",
   "upstreamRuntimeFoundationRepo": "https://github.com/multica-ai/multica",
-  "defaultBranch": "main",
-  "localBranch": "main",
+  "defaultBranch": "mortis/operator-runtime",
+  "localBranch": "mortis/operator-runtime",
   "localSourceRoot": null,
   "remoteFirstSourceRoot": "ubuntu@124.220.233.126:/srv/multica",
   "sourceRoots": {
     "registry": "docs/source-roots.json",
     "canonicalLocalRoot": null,
     "remoteFirstRoot": "ubuntu@124.220.233.126:/srv/multica",
-    "canonicalBranch": "main",
+    "canonicalBranch": "mortis/operator-runtime",
     "retiredDeployWorktree": "E:\\My Project\\Mortis-deploy-l3",
     "retiredDeployBranch": "deploy/l3-manager-dispatcher",
     "retiredDeployMergedIntoMainBy": "913ba1e",
     "productionServerRoot": "/srv/multica",
     "rule": "Remote-first source root is ubuntu@124.220.233.126:/srv/multica. Local checkout E:\\My Project\\Mortis is retired and must not be used as the default source of truth. Any future local clone is only a synchronized copy."
   },
-  "status": "remote-first-worktree",
+  "status": "active-remote-first-source",
   "publicAppUrl": "https://mortis.tengokukk.com",
   "publicAboutUrl": "https://mortis.tengokukk.com/about",
   "legacyRedirectHost": "https://golutra.tengokukk.com",
@@ -94,7 +94,8 @@
     "sourceCheckout": {
       "cloneUrl": "https://github.com/emptyinkpot/mortis-multica-source.git",
       "localSourceRoot": null,
-      "remoteFirstSourceRoot": "ubuntu@124.220.233.126:/srv/multica"
+      "remoteFirstSourceRoot": "ubuntu@124.220.233.126:/srv/multica",
+      "branch": "mortis/operator-runtime"
     },
     "localDevelopment": {
       "envBootstrap": "cp .env.example .env",
@@ -768,5 +769,27 @@
     "role": "private operator-runtime extension branch",
     "repository": "https://github.com/emptyinkpot/mortis-multica-source"
   },
-  "forkStatus": "private-multica-fork"
+  "forkStatus": "private-multica-fork",
+  "repositoryRole": "ACTIVE Mortis operator-runtime source line",
+  "runtimeSurface": "https://mortis.tengokukk.com",
+  "preferredSource": true,
+  "visibility": "public",
+  "supplyRelationships": {
+    "aiGateway": "https://github.com/emptyinkpot/sub2api",
+    "aiGatewayBaseUrl": "https://sub2api.tengokukk.com/v1",
+    "ecosystemTruth": "https://github.com/emptyinkpot/DataBase",
+    "remoteWorkspace": "https://github.com/emptyinkpot/code-server-workspace-infra",
+    "upstreamFoundation": "https://github.com/multica-ai/multica"
+  },
+  "relatedRepositories": {
+    "legacySourceRecord": "https://github.com/emptyinkpot/mortis-multica-source-legacy",
+    "watchMirror": "https://github.com/emptyinkpot/mortis-multica-watch",
+    "napcatControl": "https://github.com/emptyinkpot/mortis-napcat-control"
+  },
+  "doNotUseAs": [
+    "sanitized mirror",
+    "legacy rollback source unless explicitly requested",
+    "secret store"
+  ],
+  "productionRunbook": "docs/runtime/production-runbook.md"
 }

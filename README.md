@@ -3,6 +3,29 @@ title: Multica private fork
 status: canonical
 ---
 
+# Repository Identity
+
+```yaml
+projectName: mortis-multica-source
+repositoryRole: ACTIVE Mortis operator-runtime source line
+githubRepo: https://github.com/emptyinkpot/mortis-multica-source
+defaultBranch: mortis/operator-runtime
+runtimeSurface: https://mortis.tengokukk.com
+preferredSource: true
+upstreamFoundation: https://github.com/multica-ai/multica
+legacySourceRecord: https://github.com/emptyinkpot/mortis-multica-source-legacy
+watchMirror: https://github.com/emptyinkpot/mortis-multica-watch
+ecosystemTruth: https://github.com/emptyinkpot/DataBase
+remoteWorkspaceInfra: https://github.com/emptyinkpot/code-server-workspace-infra
+aiGateway: https://sub2api.tengokukk.com/v1
+```
+
+This is the active forward source repository for Mortis. Future source work should start here, then follow the remote-first workflow documented below and in `project.json`.
+
+- Do not use `mortis-multica-watch` as source; it is a sanitized public watch mirror.
+- Do not use `mortis-multica-source-legacy` as the preferred forward path unless the task explicitly says rollback or forensics.
+- Runtime/model-provider access is supplied through `sub2api` at `https://sub2api.tengokukk.com/v1`; keys and secrets are never stored in this repository.
+
 # Multica Private Fork
 ## Mortis operator-runtime extensions, private deployment, and self-hosting handbook
 
