@@ -46,3 +46,24 @@ adapter was migrated to:
 integrations/napcat-control/
 docs/integrations/napcat-control.md
 ```
+
+## Archive Readiness Assessment
+
+As of the consolidation audit:
+
+- `mortis-napcat-control` durable code has been migrated into this repository.
+- Remaining `mortis-multica-watch` references found in old host-control notes are
+  examples of the historical watch workflow, not evidence that the watch mirror
+  is the active source.
+- `mortis-multica-source-legacy` remains useful only as a rollback comparison
+  point at commit `c495be267c1aca9de453c1bae888b7dd5e2c57f9`.
+
+Recommended next disposition:
+
+```text
+mortis-multica-source-legacy -> archive after backup/export
+mortis-multica-watch         -> archive after backup/export
+mortis-napcat-control        -> archive after backup/export; migrated into integrations/napcat-control
+```
+
+Do not delete these repositories without a separate backup verification step.
