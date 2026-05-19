@@ -62,7 +62,7 @@ func TestTesterRuntimeRunsVerificationWithoutChangingCheckout(t *testing.T) {
 
 func TestTesterRuntimeRecordsConfiguredWorldSources(t *testing.T) {
 	runtime, err := NewTesterRuntime(TesterRuntimeConfig{
-		CIStatusSource:   "github-actions:emptyinkpot/mortis-multica-source",
+		CIStatusSource:   "github-actions:emptyinkpot/mortis",
 		StagingURL:       "https://staging.example.test",
 		ObservabilityURL: "https://grafana.example.test",
 	})

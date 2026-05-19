@@ -39,7 +39,7 @@ func StartBuilderDispatcherFromEnv(ctx context.Context, pool *pgxpool.Pool, log 
 
 	builder, err := NewBuilderRuntime(BuilderRuntimeConfig{
 		Logger:              log,
-		RepoURL:             getenvDefault("MORTIS_ROLE_REPO_URL", "git@github.com:emptyinkpot/mortis-multica-source.git"),
+		RepoURL:             getenvDefault("MORTIS_ROLE_REPO_URL", "git@github.com:emptyinkpot/mortis.git"),
 		BaseBranch:          getenvDefault("MORTIS_ROLE_BASE_BRANCH", "main"),
 		WorkRoot:            getenvDefault("MORTIS_AGENT_WORK_ROOT", "/srv/multica/agent-workspaces"),
 		CodexBin:            getenvDefault("MORTIS_CODEX_BIN", "codex"),
@@ -57,7 +57,7 @@ func StartBuilderDispatcherFromEnv(ctx context.Context, pool *pgxpool.Pool, log 
 	}
 	tester, err := NewTesterRuntime(TesterRuntimeConfig{
 		Logger:           log,
-		RepoURL:          getenvDefault("MORTIS_ROLE_REPO_URL", "git@github.com:emptyinkpot/mortis-multica-source.git"),
+		RepoURL:          getenvDefault("MORTIS_ROLE_REPO_URL", "git@github.com:emptyinkpot/mortis.git"),
 		BaseBranch:       getenvDefault("MORTIS_ROLE_BASE_BRANCH", "main"),
 		WorkRoot:         getenvDefault("MORTIS_AGENT_WORK_ROOT", "/srv/multica/agent-workspaces"),
 		GitUser:          getenvDefault("MORTIS_TESTER_GIT_USER", "Mortis Tester AI"),
