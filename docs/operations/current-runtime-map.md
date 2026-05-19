@@ -9,7 +9,7 @@ It is a factual operations map, not a secret store. Do not put tokens, passwords
 | Surface | Value | Notes |
 | --- | --- | --- |
 | GitHub repository | `https://github.com/emptyinkpot/mortis` | Canonical remote Git repository. |
-| Default branch | `main` | Production-facing source changes are pushed here. |
+| Default branch | `mortis/operator-runtime` | Production-facing source changes are pushed here. |
 | Local source root | none | Local checkout `E:\My Project\Mortis` was deleted and retired; future local clones are synchronized copies only. |
 | Remote source root | `ubuntu@124.220.233.126:/srv/multica` | Remote-first working tree used for production-side edits and deployment checks. |
 | Production runtime root | `/srv/multica` | Same path as the remote source root today. |
@@ -85,8 +85,8 @@ The current preferred workflow is:
 edit /srv/multica on 124.220.233.126
 -> validate remotely
 -> commit in /srv/multica
--> push to GitHub main
--> sync E:\My Project\Mortis to origin/main
+-> push to GitHub mortis/operator-runtime
+-> sync E:\My Project\mortis to origin/mortis/operator-runtime
 ```
 
 When a change is made directly in the local checkout, push it to GitHub and fast-forward `/srv/multica` before treating it as deployed.

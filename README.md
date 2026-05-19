@@ -45,8 +45,8 @@ localSourceRoot: none; local checkout retired
 remoteFirstSourceRoot: ubuntu@124.220.233.126:/srv/multica
 githubRepo: https://github.com/emptyinkpot/mortis
 upstreamRuntimeFoundationRepo: https://github.com/multica-ai/multica
-defaultBranch: main
-localBranch: main
+defaultBranch: mortis/operator-runtime
+localBranch: mortis/operator-runtime
 publicAppUrl: https://mortis.tengokukk.com
 publicAboutUrl: https://mortis.tengokukk.com/about
 legacyRedirectHost: https://golutra.tengokukk.com
@@ -306,8 +306,8 @@ make daemon
 | --- | --- |
 | GitHub 仓库 | `https://github.com/emptyinkpot/mortis` |
 | 上游运行基础仓 | `https://github.com/multica-ai/multica` |
-| 默认分支 | `main` |
-| 本机工作分支 | `main` |
+| 默认分支 | `mortis/operator-runtime` |
+| 本机工作分支 | `mortis/operator-runtime` |
 | 长期源码真源 | GitHub 仓库 |
 | 默认共同源码工作地 | `ubuntu@124.220.233.126:/srv/multica` |
 | 本机目录 | 无；`E:\My Project\Mortis` 已删除，临时 clone 只能作为同步副本 |
@@ -826,7 +826,7 @@ Operator goal
 MORTIS_ROLE_DISPATCHER_ENABLED=false
 MORTIS_ROLE_REPO_URL=git@github.com:emptyinkpot/mortis.git
 MORTIS_ROLE_LOCAL_REPO_PATH=/srv/multica
-MORTIS_ROLE_BASE_BRANCH=main
+MORTIS_ROLE_BASE_BRANCH=mortis/operator-runtime
 MORTIS_AGENT_WORK_ROOT=/srv/multica/agent-workspaces
 MORTIS_CODEX_BIN=codex
 MORTIS_CODEX_TIMEOUT_SECONDS=900
@@ -1631,7 +1631,7 @@ cd /srv/multica
 which codex
 codex --version
 mkdir -p /srv/multica/agent-workspaces/smoke-codex
-git clone --depth 1 --branch "${MORTIS_ROLE_BASE_BRANCH:-main}" file:///source /srv/multica/agent-workspaces/smoke-codex/repo
+git clone --depth 1 --branch "${MORTIS_ROLE_BASE_BRANCH:-mortis/operator-runtime}" file:///source /srv/multica/agent-workspaces/smoke-codex/repo
 cd /srv/multica/agent-workspaces/smoke-codex/repo
 printf 'Create .mortis-smoke.txt containing hello from worker.\n' | codex exec --sandbox workspace-write -
 git diff -- .mortis-smoke.txt

@@ -4,18 +4,18 @@
     "host": "ubuntu@124.220.233.126",
     "path": "/srv/multica",
     "url": "ubuntu@124.220.233.126:/srv/multica",
-    "branch": "main",
+    "branch": "mortis/operator-runtime",
     "role": "default shared source worksite for Mortis code, documentation, validation, commits, and production-facing deployment checks"
   },
   "github": {
     "repository": "https://github.com/emptyinkpot/mortis",
-    "default_branch": "main",
+    "default_branch": "mortis/operator-runtime",
     "role": "canonical Git history and collaboration remote"
   },
   "retired_local_source": {
     "path": "E:\\My Project\\Mortis",
     "status": "deleted and retired",
-    "rule": "Do not treat this path as the source of truth. If recreated, it is only a synchronized copy of GitHub/main."
+    "rule": "Do not treat this path as the source of truth. If recreated, it is only a synchronized copy of GitHub/mortis/operator-runtime."
   },
   "retired_deploy_worktree": {
     "path": "E:\\My Project\\Mortis-deploy-l3",
@@ -28,7 +28,7 @@
     "edit ubuntu@124.220.233.126:/srv/multica",
     "validate remotely",
     "commit in /srv/multica",
-    "push GitHub main",
+    "push GitHub mortis/operator-runtime",
     "treat future local checkouts as synchronized copies only"
   ],
   "runtime_state_not_tracked": [

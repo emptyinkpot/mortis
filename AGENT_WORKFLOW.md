@@ -74,9 +74,9 @@ Each agent must create or use a dedicated worktree:
 
 ```bash
 git fetch origin
-git checkout main
+git checkout mortis/operator-runtime
 git pull --ff-only
-git worktree add ../worktrees/<agent-id>-<task-slug> -b <branch-name> origin/main
+git worktree add ../worktrees/<agent-id>-<task-slug> -b <branch-name> origin/mortis/operator-runtime
 cd ../worktrees/<agent-id>-<task-slug>
 ```
 

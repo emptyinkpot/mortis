@@ -567,7 +567,7 @@
       "MORTIS_ROLE_DISPATCHER_ENABLED": "false by default; true starts dispatcher",
       "MORTIS_ROLE_REPO_URL": "git@github.com:emptyinkpot/mortis.git; production may use file:///source for local clone reliability",
       "MORTIS_ROLE_LOCAL_REPO_PATH": "/srv/multica mounted read-only to /source when MORTIS_ROLE_REPO_URL=file:///source",
-      "MORTIS_ROLE_BASE_BRANCH": "main",
+      "MORTIS_ROLE_BASE_BRANCH": "mortis/operator-runtime",
       "MORTIS_AGENT_WORK_ROOT": "/srv/multica/agent-workspaces",
       "MORTIS_CODEX_BIN": "codex",
       "MORTIS_CODEX_TIMEOUT_SECONDS": "900",
