@@ -5,7 +5,7 @@ This repository should be treated as a downstream fork of Multica, not as an unr
 ## Current Truth
 
 - Upstream: `https://github.com/multica-ai/multica`
-- Downstream repository: `https://github.com/emptyinkpot/mortis-multica-source`
+- Downstream repository: `https://github.com/emptyinkpot/mortis`
 - Remote working tree: `ubuntu@124.220.233.126:/srv/multica`
 - Upstream snapshot inspected: `e076bba fix(runtimes): price OpenAI Codex / GPT models so cost stops showing $0 (#2334)`
 - Downstream snapshot inspected: `5d6e045 docs: record external gateway plugin repo`

@@ -1,8 +1,8 @@
 {
-  "projectName": "mortis-multica-source",
+  "projectName": "mortis",
   "canonicalDoc": "README.md",
   "machineReadableEntry": "project.json",
-  "githubRepo": "https://github.com/emptyinkpot/mortis-multica-source",
+  "githubRepo": "https://github.com/emptyinkpot/mortis",
   "upstreamRuntimeFoundationRepo": "https://github.com/multica-ai/multica",
   "defaultBranch": "mortis/operator-runtime",
   "localBranch": "mortis/operator-runtime",
@@ -92,7 +92,7 @@
       }
     ],
     "sourceCheckout": {
-      "cloneUrl": "https://github.com/emptyinkpot/mortis-multica-source.git",
+      "cloneUrl": "https://github.com/emptyinkpot/mortis.git",
       "localSourceRoot": null,
       "remoteFirstSourceRoot": "ubuntu@124.220.233.126:/srv/multica",
       "branch": "mortis/operator-runtime"
@@ -565,7 +565,7 @@
     },
     "environment": {
       "MORTIS_ROLE_DISPATCHER_ENABLED": "false by default; true starts dispatcher",
-      "MORTIS_ROLE_REPO_URL": "git@github.com:emptyinkpot/mortis-multica-source.git; production may use file:///source for local clone reliability",
+      "MORTIS_ROLE_REPO_URL": "git@github.com:emptyinkpot/mortis.git; production may use file:///source for local clone reliability",
       "MORTIS_ROLE_LOCAL_REPO_PATH": "/srv/multica mounted read-only to /source when MORTIS_ROLE_REPO_URL=file:///source",
       "MORTIS_ROLE_BASE_BRANCH": "main",
       "MORTIS_AGENT_WORK_ROOT": "/srv/multica/agent-workspaces",
@@ -767,7 +767,7 @@
   "downstream": {
     "name": "Mortis",
     "role": "private operator-runtime extension branch",
-    "repository": "https://github.com/emptyinkpot/mortis-multica-source"
+    "repository": "https://github.com/emptyinkpot/mortis"
   },
   "forkStatus": "private-multica-fork",
   "repositoryRole": "ACTIVE Mortis operator-runtime source line",

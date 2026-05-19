@@ -10,7 +10,7 @@ Mature engineering organizations usually manage cooperating systems with these l
 | --- | --- | --- |
 | Upstream project | External canonical source | `AstrBotDevs/AstrBot` remains upstream |
 | Owned fork | Place for patches intended for upstream contribution | `emptyinkpot/AstrBot` |
-| Product integration repo | Owns private business runtime and adapters | `emptyinkpot/mortis-multica-source` |
+| Product integration repo | Owns private business runtime and adapters | `emptyinkpot/mortis` |
 | Deployment checkout | Runs production, not source-of-truth development | `/srv/astrbot`, `/srv/multica` |
 | Adapter boundary | Stable interface between products | Mortis Gateway / AstrBot plugin |
 | Vendor policy | Tracks version, patches, license, update strategy | docs + ADRs |
@@ -26,7 +26,7 @@ AstrBotDevs/AstrBot
 emptyinkpot/AstrBot
   Mortis-owned fork for AstrBot patches and PRs
 
-emptyinkpot/mortis-multica-source
+emptyinkpot/mortis
   Mortis Core, operator policy, adapter specs, deployment docs
 
 /srv/astrbot

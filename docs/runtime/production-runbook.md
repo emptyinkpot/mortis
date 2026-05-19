@@ -5,7 +5,7 @@ This runbook records the production-facing identity for the active Mortis source
 ## Runtime Identity
 
 ```yaml
-repository: https://github.com/emptyinkpot/mortis-multica-source
+repository: https://github.com/emptyinkpot/mortis
 role: ACTIVE Mortis operator-runtime source line
 branch: mortis/operator-runtime
 publicUrl: https://mortis.tengokukk.com
@@ -18,7 +18,7 @@ aiGatewayBaseUrl: https://sub2api.tengokukk.com/v1
 
 ## Source And Deployment Boundary
 
-- Active source work belongs in `mortis-multica-source`.
+- Active source work belongs in `mortis`.
 - The shared remote workspace and IDE topology is governed by `code-server-workspace-infra`.
 - Ecosystem-level repository relationships are governed by `DataBase`.
 - `mortis-multica-source-legacy` is a legacy source record for rollback or forensics.

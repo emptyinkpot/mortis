@@ -6,7 +6,7 @@ repositories without importing their full histories into the active source tree.
 ## Active Source
 
 ```text
-repository: https://github.com/emptyinkpot/mortis-multica-source
+repository: https://github.com/emptyinkpot/mortis
 branch: mortis/operator-runtime
 current consolidation commit: e3dce2ef64bbdafbe2ce7c93450ed4cf6cba9755
 ```

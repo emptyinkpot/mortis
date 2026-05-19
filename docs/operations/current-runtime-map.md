@@ -8,7 +8,7 @@ It is a factual operations map, not a secret store. Do not put tokens, passwords
 
 | Surface | Value | Notes |
 | --- | --- | --- |
-| GitHub repository | `https://github.com/emptyinkpot/mortis-multica-source` | Canonical remote Git repository. |
+| GitHub repository | `https://github.com/emptyinkpot/mortis` | Canonical remote Git repository. |
 | Default branch | `main` | Production-facing source changes are pushed here. |
 | Local source root | none | Local checkout `E:\My Project\Mortis` was deleted and retired; future local clones are synchronized copies only. |
 | Remote source root | `ubuntu@124.220.233.126:/srv/multica` | Remote-first working tree used for production-side edits and deployment checks. |

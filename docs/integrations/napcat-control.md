@@ -25,7 +25,7 @@ https://github.com/emptyinkpot/mortis-napcat-control
 Consolidation target:
 
 ```text
-https://github.com/emptyinkpot/mortis-multica-source
+https://github.com/emptyinkpot/mortis
 path: integrations/napcat-control/
 ```
 

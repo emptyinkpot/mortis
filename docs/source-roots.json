@@ -8,7 +8,7 @@
     "role": "default shared source worksite for Mortis code, documentation, validation, commits, and production-facing deployment checks"
   },
   "github": {
-    "repository": "https://github.com/emptyinkpot/mortis-multica-source",
+    "repository": "https://github.com/emptyinkpot/mortis",
     "default_branch": "main",
     "role": "canonical Git history and collaboration remote"
   },

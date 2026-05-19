@@ -144,7 +144,7 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       MORTIS_ROLE_DISPATCHER_ENABLED: ${MORTIS_ROLE_DISPATCHER_ENABLED:-false}
       MORTIS_MAILBOX_CONSUMER_ENABLED: ${MORTIS_MAILBOX_CONSUMER_ENABLED:-false}
-      MORTIS_ROLE_REPO_URL: ${MORTIS_ROLE_REPO_URL:-git@github.com:emptyinkpot/mortis-multica-source.git}
+      MORTIS_ROLE_REPO_URL: ${MORTIS_ROLE_REPO_URL:-git@github.com:emptyinkpot/mortis.git}
       MORTIS_ROLE_BASE_BRANCH: ${MORTIS_ROLE_BASE_BRANCH:-main}
       MORTIS_AGENT_WORK_ROOT: ${MORTIS_AGENT_WORK_ROOT:-/srv/multica/agent-workspaces}
       MORTIS_CODEX_HOME: ${MORTIS_CODEX_HOME:-/root/.codex}

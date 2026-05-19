@@ -22,7 +22,7 @@ canonicalChineseDoc: README.zh-CN.md
 machineReadableEntry: project.json
 localSourceRoot: none; local checkout retired
 remoteFirstSourceRoot: ubuntu@124.220.233.126:/srv/multica
-githubRepo: https://github.com/emptyinkpot/mortis-multica-source
+githubRepo: https://github.com/emptyinkpot/mortis
 upstreamRuntimeFoundationRepo: https://github.com/multica-ai/multica
 defaultBranch: main
 localBranch: main
@@ -69,7 +69,7 @@ machineReadableReplicationRunbook: project.json#replicationRunbook
 
 - 项目名：`Multica private fork`
 - Fork codename：`Mortis`
-- GitHub：`https://github.com/emptyinkpot/mortis-multica-source`
+- GitHub：`https://github.com/emptyinkpot/mortis`
 - 上游运行基础：`https://github.com/multica-ai/multica`
 - 默认共同源码工作地：`ubuntu@124.220.233.126:/srv/multica`
 - 本机源码副本：无；如重新 clone，仅作同步副本
@@ -100,8 +100,8 @@ machineReadableReplicationRunbook: project.json#replicationRunbook
 #### B. 拉取源码
 
 ```bash
-git clone https://github.com/emptyinkpot/mortis-multica-source.git
-cd mortis-multica-source
+git clone https://github.com/emptyinkpot/mortis.git
+cd mortis
 ```
 
 本机工作副本源码根：无；本机 `E:\My Project\Mortis` 已退役。默认共同源码工作地是 `ubuntu@124.220.233.126:/srv/multica`。
@@ -243,7 +243,7 @@ make daemon
 
 | 项目 | 值 |
 | --- | --- |
-| GitHub 仓库 | `https://github.com/emptyinkpot/mortis-multica-source` |
+| GitHub 仓库 | `https://github.com/emptyinkpot/mortis` |
 | 上游运行基础仓 | `https://github.com/multica-ai/multica` |
 | 默认分支 | `main` |
 | 本机工作分支 | `main` |
@@ -678,7 +678,7 @@ Operator goal
 
 ```env
 MORTIS_ROLE_DISPATCHER_ENABLED=false
-MORTIS_ROLE_REPO_URL=git@github.com:emptyinkpot/mortis-multica-source.git
+MORTIS_ROLE_REPO_URL=git@github.com:emptyinkpot/mortis.git
 MORTIS_ROLE_LOCAL_REPO_PATH=/srv/multica
 MORTIS_ROLE_BASE_BRANCH=main
 MORTIS_AGENT_WORK_ROOT=/srv/multica/agent-workspaces
